@@ -1,13 +1,40 @@
 <script setup lang="ts">
-defineProps<{
+import { computed, ref, watch } from "vue";
+import type { ScriptKind } from "@/data/gojuuon";
+import { resolveStrokeAssets } from "@/data/strokeAssets";
+
+const props = defineProps<{
   kana: string;
   romaji: string;
+  entryId: string;
+  script: ScriptKind;
   open: boolean;
 }>();
 
 defineEmits<{
   close: [];
 }>();
+
+const bust = ref(0);
+const failed = ref(false);
+
+const resolved = computed(() => resolveStrokeAssets(props.entryId || props.romaji, props.script));
+
+const gifUrls = computed(() => resolved.value.urls.map((url) => `${url}?r=${bust.value}`));
+
+watch(
+  () => [props.open, props.entryId, props.script] as const,
+  ([open]) => {
+    if (open) {
+      bust.value += 1;
+      failed.value = false;
+    }
+  },
+);
+
+function onImgError() {
+  failed.value = true;
+}
 </script>
 
 <template>
@@ -20,14 +47,29 @@ defineEmits<{
         </button>
       </header>
 
-      <div class="demo__stage" aria-hidden="true">
-        <span class="demo__kana">{{ kana }}</span>
-        <div class="demo__placeholder">
-          <span class="demo__pulse" />
-          <p>笔画动画资源稍后提供</p>
-          <p class="demo__hint">当前显示正确字形对照 · {{ romaji }}</p>
+      <p class="demo__meta">
+        <span class="demo__kana-label">{{ kana }}</span>
+        <span class="demo__romaji">{{ romaji }}</span>
+      </p>
+
+      <div class="demo__stage" :class="{ 'demo__stage--split': gifUrls.length > 1 }">
+        <template v-if="!failed">
+          <img
+            v-for="(url, index) in gifUrls"
+            :key="url"
+            class="demo__gif"
+            :src="url"
+            :alt="`${kana} 笔顺 ${index + 1}`"
+            @error="onImgError"
+          />
+        </template>
+        <div v-else class="demo__fallback">
+          <span class="demo__fallback-kana">{{ kana }}</span>
+          <p>笔顺动图暂不可用</p>
         </div>
       </div>
+
+      <p v-if="resolved.note" class="demo__note">{{ resolved.note }}</p>
 
       <button type="button" class="demo__done" @click="$emit('close')">知道了</button>
     </div>
@@ -48,7 +90,7 @@ defineEmits<{
 }
 
 .demo__panel {
-  width: min(420px, 100%);
+  width: min(440px, 100%);
   background: #fffaf1;
   border: 1px solid rgba(45, 74, 62, 0.2);
   border-radius: 8px;
@@ -61,7 +103,7 @@ defineEmits<{
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 0.85rem;
+  margin-bottom: 0.55rem;
 }
 
 .demo__header h2 {
@@ -81,52 +123,75 @@ defineEmits<{
   cursor: pointer;
 }
 
+.demo__meta {
+  margin: 0 0 0.65rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  color: #5a6d64;
+}
+
+.demo__kana-label {
+  font-family: "Noto Serif JP", "Hiragino Mincho ProN", serif;
+  font-size: 1.55rem;
+  color: #1a2e26;
+  line-height: 1;
+}
+
+.demo__romaji {
+  font-family: "Source Serif 4", "Noto Serif", Georgia, serif;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+}
+
 .demo__stage {
-  position: relative;
   display: grid;
   place-items: center;
-  min-height: 220px;
+  min-height: 240px;
   border-radius: 6px;
   background:
     radial-gradient(circle at 50% 40%, rgba(61, 122, 94, 0.08), transparent 55%),
     linear-gradient(180deg, #f7f1e6, #efe6d6);
-  border: 1px dashed rgba(45, 74, 62, 0.28);
+  border: 1px solid rgba(45, 74, 62, 0.18);
   overflow: hidden;
+  padding: 0.75rem;
 }
 
-.demo__kana {
-  font-family: "Noto Serif JP", "Hiragino Mincho ProN", serif;
-  font-size: clamp(4.5rem, 18vw, 6.5rem);
-  color: rgba(31, 51, 43, 0.88);
-  line-height: 1;
-  animation: ink-in 480ms ease;
+.demo__stage--split {
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
 }
 
-.demo__placeholder {
-  position: absolute;
-  inset: auto 0 0.85rem;
+.demo__gif {
+  width: min(220px, 100%);
+  height: auto;
+  max-height: 260px;
+  object-fit: contain;
+  image-rendering: auto;
+  background: #fff;
+  border-radius: 4px;
+  animation: ink-in 320ms ease;
+}
+
+.demo__fallback {
   text-align: center;
   color: #4d6258;
-  font-size: 0.88rem;
 }
 
-.demo__placeholder p {
-  margin: 0.15rem 0 0;
+.demo__fallback-kana {
+  display: block;
+  font-family: "Noto Serif JP", "Hiragino Mincho ProN", serif;
+  font-size: 4.5rem;
+  color: rgba(31, 51, 43, 0.88);
+  line-height: 1;
+  margin-bottom: 0.5rem;
 }
 
-.demo__hint {
-  opacity: 0.75;
-  font-size: 0.8rem;
-}
-
-.demo__pulse {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #3d7a5e;
-  margin-bottom: 0.35rem;
-  animation: pulse 1.4s ease-in-out infinite;
+.demo__note {
+  margin: 0.65rem 0 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  color: #5a6d64;
 }
 
 .demo__done {
@@ -169,23 +234,11 @@ defineEmits<{
 @keyframes ink-in {
   from {
     opacity: 0;
-    transform: scale(0.92);
+    transform: scale(0.96);
   }
   to {
     opacity: 1;
     transform: scale(1);
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    opacity: 0.35;
-    transform: scale(0.9);
-  }
-  50% {
-    opacity: 1;
-    transform: scale(1.15);
   }
 }
 </style>

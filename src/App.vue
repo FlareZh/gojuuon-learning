@@ -91,6 +91,8 @@ watch(current, () => {
       :open="demoOpen"
       :kana="kanaForCurrent"
       :romaji="current?.entry.romaji ?? ''"
+      :entry-id="current?.entry.id ?? ''"
+      :script="current?.script ?? 'hiragana'"
       @close="demoOpen = false"
     />
   </div>

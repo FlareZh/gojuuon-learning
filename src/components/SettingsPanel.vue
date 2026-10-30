@@ -155,7 +155,8 @@ function toggleGroup(group: KanaGroup) {
           />
         </label>
         <p class="sheet__meta">
-          到期 {{ dueCount }} · 新卡剩余 {{ newRemainingToday }}/{{ settings.newCardsPerDay }} · 今日已练
+          到期 {{ dueCount }} · 新卡剩余 {{ newRemainingToday }}/{{ settings.newCardsPerDay }} ·
+          今日已练
           {{ reviewedToday }}
         </p>
       </section>

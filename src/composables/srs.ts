@@ -165,7 +165,9 @@ function normalizeItem(raw: Partial<ItemStats> & Record<string, unknown>): ItemS
   };
 }
 
-export function migrateStatsMap(existing: Record<string, Partial<ItemStats>>): Record<string, ItemStats> {
+export function migrateStatsMap(
+  existing: Record<string, Partial<ItemStats>>,
+): Record<string, ItemStats> {
   const next: Record<string, ItemStats> = {};
   for (const [key, value] of Object.entries(existing)) {
     next[key] = normalizeItem(value as Partial<ItemStats> & Record<string, unknown>);

@@ -3,10 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "packageManager": "pnpm@12.16.1+sha256.ca362a16f2e1c3cfa81d406f3242446179a0e4aea457ba3e9e6c39e6476aba65",
-  "engines": {
-    "node": "24.x"
-  },
   "scripts": {
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
@@ -17,7 +13,8 @@
     "strokes:fetch": "node scripts/fetch-strokes.mjs"
   },
   "dependencies": {
-    "vue": "^3.5.44"
+    "vue": "^3.5.44",
+    "workbox-window": "^7.4.1"
   },
   "devDependencies": {
     "@types/node": "^24.19.2",
@@ -27,6 +24,11 @@
     "oxlint": "^1.90.0",
     "typescript": "~6.0.3",
     "vite": "^8.3.5",
+    "vite-plugin-pwa": "^2.0.0",
     "vue-tsc": "^3.3.13"
-  }
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "packageManager": "pnpm@12.16.1+sha256.ca362a16f2e1c3cfa81d406f3242446179a0e4aea457ba3e9e6c39e6476aba65"
 }

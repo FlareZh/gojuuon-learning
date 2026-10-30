@@ -125,11 +125,7 @@ function shuffleInPlace<T>(items: T[]): T[] {
   return items;
 }
 
-function compareCardKeys(
-  a: string,
-  b: string,
-  entryById: Map<string, KanaEntry>,
-): number {
+function compareCardKeys(a: string, b: string, entryById: Map<string, KanaEntry>): number {
   const pa = parseItemKey(a);
   const pb = parseItemKey(b);
   if (!pa || !pb) return a.localeCompare(b);
@@ -149,7 +145,9 @@ export function usePractice() {
   const currentScripts = useStorage<ScriptKind[]>("currentScripts", []);
   const session = useStorage<SessionSnapshot>("session", { ...EMPTY_SESSION });
 
-  settings.value = mergeSettings(settings.value as PracticeSettings & { hideAfterCorrect?: number });
+  settings.value = mergeSettings(
+    settings.value as PracticeSettings & { hideAfterCorrect?: number },
+  );
   stats.value = migrateStatsMap(stats.value);
 
   const current = ref<PracticeRound | null>(null);
@@ -502,7 +500,6 @@ export function usePractice() {
     restartFromBeginning,
     updateSettings,
     scriptLabel,
-    kanaFor: (script: ScriptKind) =>
-      current.value ? kanaGlyph(current.value.entry, script) : "",
+    kanaFor: (script: ScriptKind) => (current.value ? kanaGlyph(current.value.entry, script) : ""),
   };
 }

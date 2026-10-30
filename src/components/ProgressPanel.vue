@@ -115,7 +115,10 @@ function selectCell(entryId: string | null) {
             {{ header }}
           </div>
           <template v-for="(row, rowIndex) in section.rows" :key="`${section.id}-${rowIndex}`">
-            <template v-for="(cellId, colIndex) in row" :key="`${section.id}-${rowIndex}-${colIndex}`">
+            <template
+              v-for="(cellId, colIndex) in row"
+              :key="`${section.id}-${rowIndex}-${colIndex}`"
+            >
               <button
                 v-if="cellId"
                 type="button"

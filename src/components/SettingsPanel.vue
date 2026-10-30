@@ -90,7 +90,7 @@ function toggleGroup(group: KanaGroup) {
           </button>
         </div>
         <p v-if="settings.scriptMode === 'both'" class="sheet__hint">
-          同一罗马音下，到期的平假名 / 片假名可合并为一题，分别计分与排程。
+          平假名与片假名各自单独出题、分别计分与排程。
         </p>
       </section>
 

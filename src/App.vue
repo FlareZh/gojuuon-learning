@@ -333,8 +333,8 @@ const promptLabel = computed(() => {
 }
 
 .boards--dual {
-  grid-template-columns: 1fr 1fr;
-  gap: 0.55rem;
+  grid-template-columns: 1fr;
+  gap: 0.65rem;
   align-items: start;
 }
 
@@ -531,17 +531,18 @@ const promptLabel = computed(() => {
   }
 }
 
-/* Very narrow phones: stack dual boards for larger writing area */
-@media (max-width: 360px) {
-  .boards--dual {
-    grid-template-columns: 1fr;
-  }
-}
-
 @media (min-width: 480px) {
   .app {
     padding-left: 1.1rem;
     padding-right: 1.1rem;
+  }
+}
+
+/* Tablet / desktop: dual boards side by side */
+@media (min-width: 640px) {
+  .boards--dual {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.55rem;
   }
 }
 </style>

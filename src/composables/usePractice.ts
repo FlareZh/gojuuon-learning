@@ -240,13 +240,12 @@ export function usePractice() {
     };
   }
 
-  /**
-   * Peek upcoming card keys and merge consecutive same-entry scripts into one round.
-   */
+  /** One queue card = one script; never merge 平/片 into a dual round. */
   function takeNextRound(excludeEntryId?: string): PracticeRound | null {
     const now = Date.now();
     refillQueueIfNeeded(now);
 
+    const modeScripts = scriptsForMode(settings.value.scriptMode);
     const rotated = new Set<string>();
     let guard = 0;
     while (guard++ < 5000) {
@@ -284,23 +283,15 @@ export function usePractice() {
         continue;
       }
 
-      const scripts: ScriptKind[] = [parsed.script];
-      let consumed = 1;
-      for (let i = 1; i < session.value.queue.length; i++) {
-        const next = parseItemKey(session.value.queue[i]!);
-        if (!next || next.entryId !== parsed.entryId) break;
-        if (!scripts.includes(next.script)) scripts.push(next.script);
-        consumed += 1;
-      }
-
       session.value = {
         ...session.value,
-        queue: session.value.queue.slice(consumed),
+        queue: session.value.queue.slice(1),
       };
 
-      // Stable script order: hiragana then katakana
-      scripts.sort((a, b) => (a === b ? 0 : a === "hiragana" ? -1 : 1));
-      return { entry, scripts };
+      const script = modeScripts.includes(parsed.script)
+        ? parsed.script
+        : (modeScripts[0] ?? parsed.script);
+      return { entry, scripts: [script] };
     }
 
     return null;
@@ -322,24 +313,12 @@ export function usePractice() {
     const entry = entryById.value.get(id);
     if (!entry) return false;
 
-    const preferred = currentScripts.value.filter((s) =>
-      scriptsForMode(settings.value.scriptMode).includes(s),
-    );
-    const scripts =
-      preferred.length > 0 ? preferred : scriptsForMode(settings.value.scriptMode).slice(0, 1);
+    const allowed = scriptsForMode(settings.value.scriptMode);
+    const preferred = currentScripts.value.find((s) => allowed.includes(s));
+    const script = preferred ?? allowed[0];
+    if (!script) return false;
 
-    // Prefer scripts that are still due or were in the saved round.
-    const now = Date.now();
-    const dueScripts = scripts.filter((script) => {
-      const s = getStats(itemKey(id, script));
-      return isDue(s, now) || s.lastReviewedAt != null || isNewCard(s) || s.dueAt != null;
-    });
-    const finalScripts = (dueScripts.length > 0 ? dueScripts : scripts).sort((a, b) =>
-      a === b ? 0 : a === "hiragana" ? -1 : 1,
-    );
-    if (finalScripts.length === 0) return false;
-
-    current.value = { entry, scripts: finalScripts };
+    current.value = { entry, scripts: [script] };
     return true;
   }
 
@@ -349,19 +328,19 @@ export function usePractice() {
       if (!restoreCurrent()) advance();
       return;
     }
-    // Keep current if entry still enabled; refresh script list against mode.
+    // Keep current if entry still enabled; collapse any legacy dual round to one script.
     const entry = entryById.value.get(current.value.entry.id);
     if (!entry) {
       advance(current.value.entry.id);
       return;
     }
     const allowed = scriptsForMode(settings.value.scriptMode);
-    const scripts = current.value.scripts.filter((s) => allowed.includes(s));
-    if (scripts.length === 0) {
+    const script = current.value.scripts.find((s) => allowed.includes(s)) ?? allowed[0];
+    if (!script) {
       advance(entry.id);
       return;
     }
-    setCurrent({ entry, scripts });
+    setCurrent({ entry, scripts: [script] });
   }
 
   function gradeScript(script: ScriptKind, correct: boolean) {

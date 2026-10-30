@@ -154,18 +154,20 @@ defineExpose({ clear, getSnapshot });
 
 .board__frame {
   position: relative;
-  width: 100%;
+  /* Cap by width (not max-height) so aspect-ratio stays a true square */
+  width: min(100%, 48dvh, 420px);
   aspect-ratio: 1;
-  max-height: min(48dvh, 420px);
+  margin-inline: auto;
 }
 
 .board--compact .board__frame {
-  max-height: min(36dvh, 240px);
+  width: min(100%, 36dvh, 280px);
 }
 
-@media (max-width: 360px) {
+/* Stacked dual boards on phone */
+@media (max-width: 639px) {
   .board--compact .board__frame {
-    max-height: min(42dvh, 280px);
+    width: min(100%, 40dvh, 320px);
   }
 }
 

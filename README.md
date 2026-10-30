@@ -17,12 +17,12 @@ Vue 3 + Vite + TypeScript 五十音手写练习。罗马音提示，画板书写
 
 每个「假名 × 字体」独立排程（非 FSRS）：
 
-| 阶段 | 含义 | 答对后间隔 |
-| ---- | ---- | ---------- |
-| 0 | 新卡 | 10 分钟 |
-| 1–2 | 学习中 | 1 天 → 3 天 |
-| 3–4 | 复习中 | 7 天 → 16 天 |
-| 5 | 成熟 | 30 天（见顶，仍会到期复习） |
+| 阶段 | 含义   | 答对后间隔                  |
+| ---- | ------ | --------------------------- |
+| 0    | 新卡   | 10 分钟                     |
+| 1–2  | 学习中 | 1 天 → 3 天                 |
+| 3–4  | 复习中 | 7 天 → 16 天                |
+| 5    | 成熟   | 30 天（见顶，仍会到期复习） |
 
 答错：阶段回退两档，并尽快再练（本会话队尾或下次打开）。旧版「连对后隐藏」数据会迁移为对应阶段，并设为立即到期。
 
@@ -49,9 +49,18 @@ Vendored under `public/strokes/` from **小楠日语** 官方打包下载（非�
 - 说明：`public/strokes/ATTRIBUTION.md`
 - 映射逻辑：`src/data/strokeAssets.ts`（`fu` ← 源站 `hu`；浊音/半浊音→清音基字；拗音→基字 + 小やゆよ）
 
+## PWA
+
+生产构建已接入 `vite-plugin-pwa`（可安装到主屏幕、Service Worker 自动更新）。
+
+- Manifest / 图标：`public/pwa-*.png`、`public/apple-touch-icon.png`
+- 笔顺 GIF：运行时 `CacheFirst`（`/strokes/`）
+- 验证：`pnpm build && pnpm preview`，用 HTTPS 或 localhost 打开后「安装应用」
+
 ## 技术栈
 
 - Vue 3 + Vite + TypeScript
+- vite-plugin-pwa
 - oxlint / oxfmt（oxc 工具链）
 
 ## 主要路径

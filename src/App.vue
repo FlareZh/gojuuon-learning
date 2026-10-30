@@ -193,7 +193,8 @@ const promptLabel = computed(() => {
         </template>
 
         <p class="progress">
-          到期 {{ dueCount }} · 新卡剩余 {{ newRemainingToday }}/{{ settings.newCardsPerDay }} · 今日已练
+          到期 {{ dueCount }} · 新卡剩余 {{ newRemainingToday }}/{{ settings.newCardsPerDay }} ·
+          今日已练
           {{ reviewedToday }}
         </p>
       </template>
@@ -205,7 +206,9 @@ const promptLabel = computed(() => {
         </p>
         <div class="empty__actions">
           <button type="button" class="btn btn--ok" @click="settingsOpen = true">打开设置</button>
-          <button type="button" class="btn btn--ghost" @click="progressOpen = true">查看进度</button>
+          <button type="button" class="btn btn--ghost" @click="progressOpen = true">
+            查看进度
+          </button>
         </div>
       </section>
     </main>

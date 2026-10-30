@@ -1,0 +1,25 @@
+src/data/strokeAssets.ts
+  s_17c49a9edc118f::t_30fb7d56dff986 135,143-148,150,196
+README.md
+  9d4d930c2728c94d 49-58
+.github/workflows/deploy-pages.yml
+  s_17c49a9edc118f::t_30fb7d56dff986 1-55
+vite.config.ts
+  s_17c49a9edc118f::t_30fb7d56dff986 7-8
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.4.51-trip",
+  "base_commit_sha": "5c50739ccac93d9b912375d63d53f218e68312d4",
+  "prompts": {},
+  "sessions": {
+    "s_17c49a9edc118f": {
+      "agent_id": {
+        "tool": "cursor",
+        "id": "3d94b5f3-8419-4335-9138-d986eba81dde",
+        "model": "default"
+      },
+      "human_author": "TIANREN ZHAO（赵天任） <zhaotr@trip.com>"
+    }
+  }
+}

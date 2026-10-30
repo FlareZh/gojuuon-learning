@@ -46,13 +46,16 @@ pnpm strokes:fetch   # refresh stroke GIFs from upstream zip
 
 **https://flarezh.github.io/gojuuon-learning/**
 
-一次性设置（仓库管理员）：
+### 必须由仓库管理员完成一次（否则 deploy 会 404）
 
-1. 打开 GitHub 仓库 **Settings → Pages**
+Workflow 里 **build 已通过**；若 **deploy** 报 `Creating Pages deployment failed` / `HttpError: Not Found` / `Ensure GitHub Pages has been enabled`，说明 Pages 尚未启用（与 pnpm / Vite base 无关）。
+
+1. 打开 [Settings → Pages](https://github.com/FlareZh/gojuuon-learning/settings/pages)
 2. **Build and deployment → Source** 选 **GitHub Actions**（不要选 “Deploy from a branch”）
-3. 合并本 PR / 推送到 `main` 后，workflow `Deploy GitHub Pages` 会构建并发布 `dist`
+3. 回到 [Actions](https://github.com/FlareZh/gojuuon-learning/actions) → 最近一次 **Deploy GitHub Pages** → **Re-run failed jobs**  
+   （或在 Actions 里对该 workflow 点 **Run workflow**）
 
-PR 分支 `cursor/github-pages-7cc0` 也会触发同一 workflow，便于合并前验证；正式站点以 `main` 部署为准。
+完成后站点为：https://flarezh.github.io/gojuuon-learning/
 
 ## 笔画动图来源
 

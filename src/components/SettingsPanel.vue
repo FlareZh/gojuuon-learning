@@ -5,15 +5,16 @@ import type { OrderMode, PracticeSettings, ScriptMode } from "@/composables/useP
 const props = defineProps<{
   open: boolean;
   settings: PracticeSettings;
-  remaining: number;
-  total: number;
-  hidden: number;
+  dueCount: number;
+  newRemainingToday: number;
+  reviewedToday: number;
 }>();
 
 const emit = defineEmits<{
   close: [];
   update: [patch: Partial<PracticeSettings>];
   reset: [];
+  restart: [];
 }>();
 
 const groupLabels: Record<KanaGroup, string> = {
@@ -33,9 +34,9 @@ function setOrderMode(mode: OrderMode) {
   emit("update", { orderMode: mode });
 }
 
-function setHideAfter(value: number) {
-  const n = Number.isFinite(value) ? Math.min(20, Math.max(1, Math.round(value))) : 3;
-  emit("update", { hideAfterCorrect: n });
+function setNewCardsPerDay(value: number) {
+  const n = Number.isFinite(value) ? Math.min(40, Math.max(1, Math.round(value))) : 10;
+  emit("update", { newCardsPerDay: n });
 }
 
 function toggleGroup(group: KanaGroup) {
@@ -88,6 +89,9 @@ function toggleGroup(group: KanaGroup) {
             两者
           </button>
         </div>
+        <p v-if="settings.scriptMode === 'both'" class="sheet__hint">
+          同一罗马音下，到期的平假名 / 片假名可合并为一题，分别计分与排程。
+        </p>
       </section>
 
       <section class="sheet__section">
@@ -108,6 +112,18 @@ function toggleGroup(group: KanaGroup) {
             随机
           </button>
         </div>
+        <p class="sheet__hint">到期复习优先；顺序仅影响新卡与同批到期卡的排列。</p>
+        <button
+          v-if="settings.orderMode === 'sequential'"
+          type="button"
+          class="sheet__restart"
+          @click="$emit('restart')"
+        >
+          从头开始
+        </button>
+        <p v-if="settings.orderMode === 'sequential'" class="sheet__hint">
+          清空当前会话队列并按五十音序重建，不清除间隔重复进度。
+        </p>
       </section>
 
       <section class="sheet__section">
@@ -126,20 +142,21 @@ function toggleGroup(group: KanaGroup) {
       </section>
 
       <section class="sheet__section">
-        <h3>连续答对后隐藏</h3>
+        <h3>每日新卡</h3>
         <label class="number-field">
-          <span>连续正确次数</span>
+          <span>每天最多新学</span>
           <input
             type="number"
             min="1"
-            max="20"
-            :value="settings.hideAfterCorrect"
-            @change="setHideAfter(Number(($event.target as HTMLInputElement).value))"
+            max="40"
+            inputmode="numeric"
+            :value="settings.newCardsPerDay"
+            @change="setNewCardsPerDay(Number(($event.target as HTMLInputElement).value))"
           />
         </label>
         <p class="sheet__meta">
-          题库 {{ remaining }} / {{ total }} 可用
-          <template v-if="hidden > 0">（已隐藏 {{ hidden }}）</template>
+          到期 {{ dueCount }} · 新卡剩余 {{ newRemainingToday }}/{{ settings.newCardsPerDay }} · 今日已练
+          {{ reviewedToday }}
         </p>
       </section>
 
@@ -164,16 +181,20 @@ function toggleGroup(group: KanaGroup) {
   background: rgba(18, 28, 24, 0.38);
   cursor: pointer;
   animation: fade 160ms ease;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .sheet__panel {
   position: relative;
-  width: min(360px, 92vw);
+  width: min(360px, 100%);
   height: 100%;
+  height: 100dvh;
   overflow: auto;
+  -webkit-overflow-scrolling: touch;
   background: #fffaf1;
   border-left: 1px solid rgba(45, 74, 62, 0.18);
-  padding: 1.25rem 1.2rem 2rem;
+  padding: 1.1rem 1rem calc(2rem + env(safe-area-inset-bottom, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
   box-shadow: -12px 0 32px rgba(18, 28, 24, 0.12);
   animation: slide 220ms ease;
 }
@@ -182,27 +203,31 @@ function toggleGroup(group: KanaGroup) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1.1rem;
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .sheet__header h2 {
   margin: 0;
   font-family: "Noto Serif SC", "Songti SC", serif;
-  font-size: 1.25rem;
+  font-size: 1.2rem;
   color: #1f332b;
 }
 
 .sheet__close {
   border: none;
   background: transparent;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
   font-size: 1.5rem;
   line-height: 1;
   color: #5a6d64;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }
 
 .sheet__section {
-  margin-bottom: 1.35rem;
+  margin-bottom: 1.25rem;
 }
 
 .sheet__section h3 {
@@ -211,7 +236,6 @@ function toggleGroup(group: KanaGroup) {
   font-weight: 600;
   letter-spacing: 0.04em;
   color: #5a6d64;
-  text-transform: none;
 }
 
 .segment,
@@ -228,9 +252,12 @@ function toggleGroup(group: KanaGroup) {
   color: #2d4a3e;
   font: inherit;
   font-size: 0.9rem;
+  min-height: 2.5rem;
   padding: 0.45rem 0.75rem;
   border-radius: 4px;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .segment button.active,
@@ -251,17 +278,41 @@ function toggleGroup(group: KanaGroup) {
 
 .number-field input {
   width: 4.5rem;
+  min-height: 2.5rem;
   border: 1px solid rgba(45, 74, 62, 0.28);
   border-radius: 4px;
   background: #fff;
   padding: 0.4rem 0.5rem;
   font: inherit;
+  font-size: 16px;
 }
 
+.sheet__hint,
 .sheet__meta {
   margin: 0.55rem 0 0;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  line-height: 1.45;
   color: #5a6d64;
+}
+
+.sheet__restart {
+  width: 100%;
+  margin-top: 0.65rem;
+  border: 1px solid rgba(45, 74, 62, 0.28);
+  background: transparent;
+  color: #2d4a3e;
+  font: inherit;
+  font-size: 0.9rem;
+  min-height: 2.5rem;
+  padding: 0.55rem 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.sheet__restart:hover {
+  background: rgba(45, 74, 62, 0.06);
 }
 
 .sheet__reset {
@@ -272,9 +323,12 @@ function toggleGroup(group: KanaGroup) {
   color: #8c3830;
   font: inherit;
   font-size: 0.92rem;
+  min-height: 2.75rem;
   padding: 0.7rem 1rem;
   border-radius: 4px;
   cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
 }
 
 .sheet__reset:hover {
@@ -298,6 +352,13 @@ function toggleGroup(group: KanaGroup) {
   to {
     transform: translateX(0);
     opacity: 1;
+  }
+}
+
+@media (max-width: 420px) {
+  .sheet__panel {
+    width: 100%;
+    border-left: none;
   }
 }
 </style>

@@ -21,4 +21,4 @@ Animated stroke-order GIFs under `hiragana/` and `katakana/` come from **小楠�
 node scripts/fetch-strokes.mjs
 ```
 
-Assets are redistributed for local learning use with attribution. If the upstream license terms change or the owner requests removal, delete this folder and switch StrokeDemo to another source.
+Assets are redistributed for local learning use with attribution. If the upstream license terms change or the owner requests removal, delete this folder and switch StrokeOrder to another source.

@@ -248,7 +248,7 @@ const promptLabel = computed(() => {
   padding: 0.75rem 0.85rem calc(1.25rem + env(safe-area-inset-bottom, 0px));
   padding-left: max(0.85rem, env(safe-area-inset-left, 0px));
   padding-right: max(0.85rem, env(safe-area-inset-right, 0px));
-  padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+  padding-top: calc(1.1rem + env(safe-area-inset-top, 0px));
 }
 
 .top {

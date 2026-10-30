@@ -132,7 +132,7 @@ const YOUON_PARTS: Record<string, [SeionId, SeionId]> = {
 export type StrokeKind = "exact" | "dakuon-base" | "handakuon-base" | "youon-parts";
 
 export interface StrokeResolve {
-  /** GIF paths under /strokes/... */
+  /** GIF paths under public/strokes/... (respects Vite base) */
   urls: string[];
   kind: StrokeKind;
   /** Filenames / seion ids used */
@@ -140,8 +140,14 @@ export interface StrokeResolve {
   note: string | null;
 }
 
+function withBase(path: string): string {
+  const base = import.meta.env.BASE_URL;
+  const normalized = path.replace(/^\//, "");
+  return `${base}${normalized}`;
+}
+
 function gifPath(script: ScriptKind, id: SeionId): string {
-  return `/strokes/${script}/${id}.gif`;
+  return withBase(`strokes/${script}/${id}.gif`);
 }
 
 export function resolveStrokeAssets(entryId: string, script: ScriptKind): StrokeResolve {
@@ -187,7 +193,7 @@ export function resolveStrokeAssets(entryId: string, script: ScriptKind): Stroke
 
   // Fallback: try entry id as filename
   return {
-    urls: [`/strokes/${script}/${entryId}.gif`],
+    urls: [withBase(`strokes/${script}/${entryId}.gif`)],
     kind: "exact",
     assetIds: [entryId],
     note: null,

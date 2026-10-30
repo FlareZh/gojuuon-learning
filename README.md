@@ -17,12 +17,12 @@ Vue 3 + Vite + TypeScript 五十音手写练习。罗马音提示，画板书写
 
 每个「假名 × 字体」独立排程（非 FSRS）：
 
-| 阶段 | 含义 | 答对后间隔 |
-| ---- | ---- | ---------- |
-| 0 | 新卡 | 10 分钟 |
-| 1–2 | 学习中 | 1 天 → 3 天 |
-| 3–4 | 复习中 | 7 天 → 16 天 |
-| 5 | 成熟 | 30 天（见顶，仍会到期复习） |
+| 阶段 | 含义   | 答对后间隔                  |
+| ---- | ------ | --------------------------- |
+| 0    | 新卡   | 10 分钟                     |
+| 1–2  | 学习中 | 1 天 → 3 天                 |
+| 3–4  | 复习中 | 7 天 → 16 天                |
+| 5    | 成熟   | 30 天（见顶，仍会到期复习） |
 
 答错：阶段回退两档，并尽快再练（本会话队尾或下次打开）。旧版「连对后隐藏」数据会迁移为对应阶段，并设为立即到期。
 
@@ -39,6 +39,20 @@ pnpm lint     # oxlint
 pnpm format   # oxfmt
 pnpm strokes:fetch   # refresh stroke GIFs from upstream zip
 ```
+
+## 部署（GitHub Pages）
+
+本仓库按 **project site** 配置 Vite `base` 为 `/gojuuon-learning/`，预期地址：
+
+**https://flarezh.github.io/gojuuon-learning/**
+
+一次性设置（仓库管理员）：
+
+1. 打开 GitHub 仓库 **Settings → Pages**
+2. **Build and deployment → Source** 选 **GitHub Actions**（不要选 “Deploy from a branch”）
+3. 合并本 PR / 推送到 `main` 后，workflow `Deploy GitHub Pages` 会构建并发布 `dist`
+
+PR 分支 `cursor/github-pages-7cc0` 也会触发同一 workflow，便于合并前验证；正式站点以 `main` 部署为准。
 
 ## 笔画动图来源
 

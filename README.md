@@ -15,7 +15,10 @@ Vue 3 + Vite + TypeScript 五十音手写练习。罗马音提示，画板书写
 
 ## 开发
 
+需要 Node.js 24（见 `.nvmrc`）。
+
 ```bash
+nvm use
 pnpm install
 pnpm dev      # http://localhost:5173
 pnpm build

@@ -40,6 +40,23 @@ pnpm format   # oxfmt
 pnpm strokes:fetch   # refresh stroke GIFs from upstream zip
 ```
 
+## 部署（GitHub Pages）
+
+本仓库按 **project site** 配置 Vite `base` 为 `/gojuuon-learning/`，预期地址：
+
+**https://flarezh.github.io/gojuuon-learning/**
+
+### 必须由仓库管理员完成一次（否则 deploy 会 404）
+
+Workflow 里 **build 已通过**；若 **deploy** 报 `Creating Pages deployment failed` / `HttpError: Not Found` / `Ensure GitHub Pages has been enabled`，说明 Pages 尚未启用（与 pnpm / Vite base 无关）。
+
+1. 打开 [Settings → Pages](https://github.com/FlareZh/gojuuon-learning/settings/pages)
+2. **Build and deployment → Source** 选 **GitHub Actions**（不要选 “Deploy from a branch”）
+3. 回到 [Actions](https://github.com/FlareZh/gojuuon-learning/actions) → 最近一次 **Deploy GitHub Pages** → **Re-run failed jobs**  
+   （或在 Actions 里对该 workflow 点 **Run workflow**）
+
+完成后站点为：https://flarezh.github.io/gojuuon-learning/
+
 ## 笔画动图来源
 
 Vendored under `public/strokes/` from **小楠日语** 官方打包下载（非逐文件 CDN 抓取）：

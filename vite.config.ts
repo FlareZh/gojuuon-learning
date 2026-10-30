@@ -4,6 +4,8 @@ import { defineConfig } from "vite";
 import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
+  // Project Pages: https://flarezh.github.io/gojuuon-learning/
+  base: "/gojuuon-learning/",
   plugins: [
     vue(),
     VitePWA({

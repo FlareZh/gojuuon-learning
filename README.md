@@ -16,12 +16,12 @@ Vue 3 + Vite + TypeScript 五十音手写练习。罗马音提示，画板书写
 ## 开发
 
 ```bash
-npm install
-npm run dev      # http://localhost:5173
-npm run build
-npm run lint     # oxlint
-npm run format   # oxfmt
-npm run strokes:fetch   # refresh stroke GIFs from upstream zip
+pnpm install
+pnpm dev      # http://localhost:5173
+pnpm build
+pnpm lint     # oxlint
+pnpm format   # oxfmt
+pnpm strokes:fetch   # refresh stroke GIFs from upstream zip
 ```
 
 ## 笔画动图来源

@@ -71,8 +71,9 @@ Vendored under `public/strokes/` from **小楠日语** 官方打包下载（非�
 生产构建已接入 `vite-plugin-pwa`（可安装到主屏幕、Service Worker 自动更新）。
 
 - Manifest / 图标：`public/pwa-*.png`、`public/apple-touch-icon.png`
-- 笔顺 GIF：运行时 `CacheFirst`（`/strokes/`）
-- 验证：`pnpm build && pnpm preview`，用 HTTPS 或 localhost 打开后「安装应用」
+- `start_url` / `scope` 设为 `/gojuuon-learning/`，避免装到主屏幕后跳到站点根 `https://…github.io/`
+- 笔顺 GIF：运行时 `CacheFirst`（`/gojuuon-learning/strokes/`）
+- 验证：`pnpm build && pnpm preview`，用 HTTPS 或 localhost 打开后「安装应用」；部署后请在手机上删掉旧主屏幕图标再重新添加
 
 ## 技术栈
 

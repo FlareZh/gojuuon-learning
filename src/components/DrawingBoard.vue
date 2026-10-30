@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from "vue";
+import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 
 const props = withDefaults(
   defineProps<{
@@ -15,18 +15,41 @@ const props = withDefaults(
   },
 );
 
+const frameRef = ref<HTMLElement | null>(null);
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const drawing = ref(false);
 
 let ctx: CanvasRenderingContext2D | null = null;
+let resizeObserver: ResizeObserver | null = null;
+/** CSS-pixel size last applied to the bitmap (guides / stroke coords). */
+let cssW = 0;
+let cssH = 0;
 
 function sizeCanvas() {
+  const frame = frameRef.value;
   const canvas = canvasRef.value;
-  if (!canvas) return;
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  canvas.width = Math.round(rect.width * dpr);
-  canvas.height = Math.round(rect.height * dpr);
+  if (!frame || !canvas) return;
+  // Don't reset the bitmap while the user is mid-stroke.
+  if (drawing.value) return;
+
+  // Use the square frame's content box — stable, excludes borders on the frame.
+  const w = Math.round(frame.clientWidth);
+  const h = Math.round(frame.clientHeight);
+  if (w < 2 || h < 2) return;
+
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const nextBw = Math.round(w * dpr);
+  const nextBh = Math.round(h * dpr);
+
+  // Skip no-op resizes so we don't wipe strokes on minor subpixel noise.
+  if (canvas.width === nextBw && canvas.height === nextBh && cssW === w && cssH === h && ctx) {
+    return;
+  }
+
+  cssW = w;
+  cssH = h;
+  canvas.width = nextBw;
+  canvas.height = nextBh;
   ctx = canvas.getContext("2d");
   if (!ctx) return;
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -38,10 +61,11 @@ function sizeCanvas() {
 }
 
 function drawGuides() {
-  const canvas = canvasRef.value;
-  if (!canvas || !ctx) return;
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
+  if (!ctx || cssW < 2 || cssH < 2) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const w = cssW;
+  const h = cssH;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   ctx.save();
   ctx.strokeStyle = "rgba(45, 74, 62, 0.18)";
@@ -58,13 +82,17 @@ function drawGuides() {
   ctx.lineJoin = "round";
   ctx.lineWidth = props.compact ? 3.2 : 4;
   ctx.strokeStyle = "#1a2332";
+  ctx.setLineDash([]);
 }
 
 function pointerPos(event: PointerEvent) {
   const canvas = canvasRef.value;
-  if (!canvas) return { x: 0, y: 0 };
+  if (!canvas || cssW < 1) return { x: 0, y: 0 };
   const rect = canvas.getBoundingClientRect();
-  return { x: event.clientX - rect.left, y: event.clientY - rect.top };
+  // Map into the CSS-pixel space we used for the bitmap (handles any subpixel stretch).
+  const x = ((event.clientX - rect.left) / rect.width) * cssW;
+  const y = ((event.clientY - rect.top) / rect.height) * cssH;
+  return { x, y };
 }
 
 function onPointerDown(event: PointerEvent) {
@@ -106,13 +134,26 @@ watch(
   () => clear(),
 );
 
-onMounted(() => {
+onMounted(async () => {
+  await nextTick();
   sizeCanvas();
+  // Second pass after fonts / address-bar / dvh settle on mobile.
+  requestAnimationFrame(() => sizeCanvas());
+
+  const frame = frameRef.value;
+  if (frame && typeof ResizeObserver !== "undefined") {
+    resizeObserver = new ResizeObserver(() => sizeCanvas());
+    resizeObserver.observe(frame);
+  }
   window.addEventListener("resize", sizeCanvas);
+  window.visualViewport?.addEventListener("resize", sizeCanvas);
 });
 
 onUnmounted(() => {
+  resizeObserver?.disconnect();
+  resizeObserver = null;
   window.removeEventListener("resize", sizeCanvas);
+  window.visualViewport?.removeEventListener("resize", sizeCanvas);
 });
 
 defineExpose({ clear, getSnapshot });
@@ -121,7 +162,7 @@ defineExpose({ clear, getSnapshot });
 <template>
   <div class="board" :class="{ 'board--compact': compact, 'board--readonly': readonly }">
     <p v-if="label" class="board__label">{{ label }}</p>
-    <div class="board__frame">
+    <div ref="frameRef" class="board__frame">
       <canvas
         ref="canvasRef"
         class="board__canvas"
@@ -154,35 +195,34 @@ defineExpose({ clear, getSnapshot });
 
 .board__frame {
   position: relative;
-  /* Cap by width (not max-height) so aspect-ratio stays a true square */
-  width: min(100%, 48dvh, 420px);
+  /* Size from width only — avoid dvh (iOS URL bar toggles resize/wipe the canvas). */
+  width: min(100%, 420px);
   aspect-ratio: 1;
   margin-inline: auto;
-}
-
-.board--compact .board__frame {
-  width: min(100%, 36dvh, 280px);
-}
-
-/* Stacked dual boards on phone */
-@media (max-width: 639px) {
-  .board--compact .board__frame {
-    width: min(100%, 40dvh, 320px);
-  }
-}
-
-.board__canvas {
-  width: 100%;
-  height: 100%;
-  display: block;
   border-radius: 4px;
+  border: 1px solid rgba(45, 74, 62, 0.22);
+  overflow: hidden;
   background:
     linear-gradient(180deg, rgba(255, 252, 245, 0.95), rgba(245, 238, 224, 0.98)),
     repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(45, 74, 62, 0.04) 24px);
-  border: 1px solid rgba(45, 74, 62, 0.22);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.board--compact .board__frame {
+  width: min(100%, 280px);
+}
+
+.board__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  /* Border lives on the frame so bitmap size matches the visible square */
+  border: none;
+  background: transparent;
   touch-action: none;
   cursor: crosshair;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .board__canvas--readonly {
@@ -194,6 +234,7 @@ defineExpose({ clear, getSnapshot });
   position: absolute;
   right: 8px;
   bottom: 8px;
+  z-index: 1;
   border: 1px solid rgba(45, 74, 62, 0.28);
   background: rgba(255, 252, 245, 0.92);
   color: #2d4a3e;

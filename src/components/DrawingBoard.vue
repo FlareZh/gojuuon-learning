@@ -1,9 +1,19 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, watch } from "vue";
 
-const props = defineProps<{
-  clearToken: number;
-}>();
+const props = withDefaults(
+  defineProps<{
+    clearToken: number;
+    label?: string;
+    readonly?: boolean;
+    compact?: boolean;
+  }>(),
+  {
+    label: "",
+    readonly: false,
+    compact: false,
+  },
+);
 
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 const drawing = ref(false);
@@ -22,7 +32,7 @@ function sizeCanvas() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.lineWidth = 4;
+  ctx.lineWidth = props.compact ? 3.2 : 4;
   ctx.strokeStyle = "#1a2332";
   drawGuides();
 }
@@ -46,7 +56,7 @@ function drawGuides() {
   ctx.restore();
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.lineWidth = 4;
+  ctx.lineWidth = props.compact ? 3.2 : 4;
   ctx.strokeStyle = "#1a2332";
 }
 
@@ -58,6 +68,7 @@ function pointerPos(event: PointerEvent) {
 }
 
 function onPointerDown(event: PointerEvent) {
+  if (props.readonly) return;
   const canvas = canvasRef.value;
   if (!canvas || !ctx) return;
   canvas.setPointerCapture(event.pointerId);
@@ -68,7 +79,7 @@ function onPointerDown(event: PointerEvent) {
 }
 
 function onPointerMove(event: PointerEvent) {
-  if (!drawing.value || !ctx) return;
+  if (props.readonly || !drawing.value || !ctx) return;
   const { x, y } = pointerPos(event);
   ctx.lineTo(x, y);
   ctx.stroke();
@@ -82,6 +93,12 @@ function onPointerUp(event: PointerEvent) {
 
 function clear() {
   drawGuides();
+}
+
+function getSnapshot(): string {
+  const canvas = canvasRef.value;
+  if (!canvas) return "";
+  return canvas.toDataURL("image/png");
 }
 
 watch(
@@ -98,29 +115,58 @@ onUnmounted(() => {
   window.removeEventListener("resize", sizeCanvas);
 });
 
-defineExpose({ clear });
+defineExpose({ clear, getSnapshot });
 </script>
 
 <template>
-  <div class="board">
-    <canvas
-      ref="canvasRef"
-      class="board__canvas"
-      @pointerdown="onPointerDown"
-      @pointermove="onPointerMove"
-      @pointerup="onPointerUp"
-      @pointercancel="onPointerUp"
-    />
-    <button type="button" class="board__clear" @click="clear">清除画板</button>
+  <div class="board" :class="{ 'board--compact': compact, 'board--readonly': readonly }">
+    <p v-if="label" class="board__label">{{ label }}</p>
+    <div class="board__frame">
+      <canvas
+        ref="canvasRef"
+        class="board__canvas"
+        :class="{ 'board__canvas--readonly': readonly }"
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+        @pointercancel="onPointerUp"
+      />
+      <button v-if="!readonly" type="button" class="board__clear" @click="clear">清除</button>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .board {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  min-width: 0;
+}
+
+.board__label {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #5a6d64;
+  letter-spacing: 0.06em;
+  text-align: center;
+}
+
+.board__frame {
   position: relative;
   width: 100%;
   aspect-ratio: 1;
-  max-height: min(52vh, 420px);
+  max-height: min(48dvh, 420px);
+}
+
+.board--compact .board__frame {
+  max-height: min(36dvh, 240px);
+}
+
+@media (max-width: 360px) {
+  .board--compact .board__frame {
+    max-height: min(42dvh, 280px);
+  }
 }
 
 .board__canvas {
@@ -137,16 +183,21 @@ defineExpose({ clear });
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
 }
 
+.board__canvas--readonly {
+  cursor: default;
+  pointer-events: none;
+}
+
 .board__clear {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
+  right: 8px;
+  bottom: 8px;
   border: 1px solid rgba(45, 74, 62, 0.28);
   background: rgba(255, 252, 245, 0.92);
   color: #2d4a3e;
   font: inherit;
-  font-size: 0.82rem;
-  padding: 0.35rem 0.7rem;
+  font-size: 0.78rem;
+  padding: 0.3rem 0.6rem;
   border-radius: 4px;
   cursor: pointer;
 }

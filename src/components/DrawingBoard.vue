@@ -31,6 +31,24 @@ let resizeObserver: ResizeObserver | null = null;
 /** CSS-pixel size last applied to the bitmap (guides / stroke coords). */
 let cssW = 0;
 let cssH = 0;
+/** Canvas bitmaps after each completed stroke (empty = guides only). */
+let strokeHistory: ImageData[] = [];
+const activePointers = new Set<number>();
+/** True after a two-finger undo until all pointers lift. */
+let undoGestureActive = false;
+/** Current stroke produced visible ink (ignore empty taps). */
+let strokeDirty = false;
+
+function applyStrokeStyle() {
+  if (!ctx) return;
+  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = props.compact ? 3.2 : 4;
+  ctx.strokeStyle = "#1a2332";
+  ctx.setLineDash([]);
+}
 
 function sizeCanvas() {
   const frame = frameRef.value;
@@ -59,20 +77,16 @@ function sizeCanvas() {
   canvas.height = nextBh;
   ctx = canvas.getContext("2d");
   if (!ctx) return;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.lineWidth = props.compact ? 3.2 : 4;
-  ctx.strokeStyle = "#1a2332";
+  strokeHistory = [];
+  applyStrokeStyle();
   drawGuides();
 }
 
 function drawGuides() {
   if (!ctx || cssW < 2 || cssH < 2) return;
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
   const w = cssW;
   const h = cssH;
-  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  applyStrokeStyle();
   ctx.clearRect(0, 0, w, h);
   ctx.save();
   ctx.strokeStyle = guideStroke.value;
@@ -85,11 +99,80 @@ function drawGuides() {
   ctx.lineTo(w - 12, h / 2);
   ctx.stroke();
   ctx.restore();
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.lineWidth = props.compact ? 3.2 : 4;
-  ctx.strokeStyle = "#1a2332";
-  ctx.setLineDash([]);
+  applyStrokeStyle();
+}
+
+function captureState(): ImageData | null {
+  const canvas = canvasRef.value;
+  if (!canvas || !ctx) return null;
+  try {
+    return ctx.getImageData(0, 0, canvas.width, canvas.height);
+  } catch {
+    return null;
+  }
+}
+
+function restoreState(data: ImageData | null) {
+  const canvas = canvasRef.value;
+  if (!canvas || !ctx) return;
+  if (!data) {
+    drawGuides();
+    return;
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.putImageData(data, 0, 0);
+  applyStrokeStyle();
+}
+
+function pushStrokeHistory() {
+  const snap = captureState();
+  if (snap) strokeHistory.push(snap);
+}
+
+function undoLastStroke() {
+  if (strokeHistory.length === 0) {
+    drawGuides();
+    return;
+  }
+  strokeHistory.pop();
+  restoreState(strokeHistory[strokeHistory.length - 1] ?? null);
+}
+
+function releasePointer(pointerId: number) {
+  const canvas = canvasRef.value;
+  try {
+    canvas?.releasePointerCapture(pointerId);
+  } catch {
+    // ignore — capture may already be gone
+  }
+}
+
+function releaseAllPointers() {
+  for (const id of [...activePointers]) releasePointer(id);
+}
+
+/**
+ * Two-finger undo. First finger often already started an empty "draw";
+ * abort that, then always remove the last completed stroke once per gesture.
+ */
+function performTwoFingerUndo() {
+  if (props.readonly || undoGestureActive) return;
+
+  const hadInkInProgress = drawing.value && strokeDirty;
+  if (drawing.value) {
+    restoreState(strokeHistory[strokeHistory.length - 1] ?? null);
+    drawing.value = false;
+    strokeDirty = false;
+  }
+
+  undoGestureActive = true;
+  releaseAllPointers();
+
+  // Mid-stroke with ink: cancelling that stroke is enough.
+  // Idle / empty first-finger tap: undo the previous completed stroke.
+  if (!hadInkInProgress) {
+    undoLastStroke();
+  }
 }
 
 function pointerPos(event: PointerEvent) {
@@ -106,27 +189,66 @@ function onPointerDown(event: PointerEvent) {
   if (props.readonly) return;
   const canvas = canvasRef.value;
   if (!canvas || !ctx) return;
+
+  activePointers.add(event.pointerId);
+
+  if (activePointers.size >= 2) {
+    event.preventDefault();
+    performTwoFingerUndo();
+    return;
+  }
+
+  if (undoGestureActive) return;
+
   canvas.setPointerCapture(event.pointerId);
   drawing.value = true;
+  strokeDirty = false;
   const { x, y } = pointerPos(event);
   ctx.beginPath();
   ctx.moveTo(x, y);
 }
 
 function onPointerMove(event: PointerEvent) {
-  if (props.readonly || !drawing.value || !ctx) return;
+  if (props.readonly || !drawing.value || !ctx || undoGestureActive) return;
+  if (!activePointers.has(event.pointerId)) return;
   const { x, y } = pointerPos(event);
+  strokeDirty = true;
   ctx.lineTo(x, y);
   ctx.stroke();
 }
 
 function onPointerUp(event: PointerEvent) {
-  drawing.value = false;
-  const canvas = canvasRef.value;
-  canvas?.releasePointerCapture(event.pointerId);
+  activePointers.delete(event.pointerId);
+  releasePointer(event.pointerId);
+
+  if (drawing.value && activePointers.size === 0 && !undoGestureActive) {
+    drawing.value = false;
+    if (strokeDirty) pushStrokeHistory();
+    strokeDirty = false;
+  } else if (activePointers.size === 0) {
+    drawing.value = false;
+    strokeDirty = false;
+  }
+
+  if (activePointers.size === 0) {
+    undoGestureActive = false;
+  }
+}
+
+/** iOS/Safari: pointer events for the 2nd finger are unreliable; touchstart is not. */
+function onTouchStart(event: TouchEvent) {
+  if (props.readonly) return;
+  if (event.touches.length < 2) return;
+  event.preventDefault();
+  performTwoFingerUndo();
 }
 
 function clear() {
+  strokeHistory = [];
+  drawing.value = false;
+  strokeDirty = false;
+  undoGestureActive = false;
+  activePointers.clear();
   drawGuides();
 }
 
@@ -155,10 +277,13 @@ onMounted(async () => {
   requestAnimationFrame(() => sizeCanvas());
 
   const frame = frameRef.value;
+  const canvas = canvasRef.value;
   if (frame && typeof ResizeObserver !== "undefined") {
     resizeObserver = new ResizeObserver(() => sizeCanvas());
     resizeObserver.observe(frame);
   }
+  // passive: false so we can prevent pinch-zoom and handle two-finger undo.
+  canvas?.addEventListener("touchstart", onTouchStart, { passive: false });
   window.addEventListener("resize", sizeCanvas);
   window.visualViewport?.addEventListener("resize", sizeCanvas);
 });
@@ -166,6 +291,7 @@ onMounted(async () => {
 onUnmounted(() => {
   resizeObserver?.disconnect();
   resizeObserver = null;
+  canvasRef.value?.removeEventListener("touchstart", onTouchStart);
   window.removeEventListener("resize", sizeCanvas);
   window.visualViewport?.removeEventListener("resize", sizeCanvas);
 });

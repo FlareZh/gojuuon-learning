@@ -72,111 +72,115 @@ function selectCell(entryId: string | null) {
   <div v-if="open" class="panel" role="dialog" aria-modal="true" aria-labelledby="progress-title">
     <button type="button" class="panel__backdrop" aria-label="关闭进度" @click="$emit('close')" />
     <aside class="panel__sheet">
-      <header class="panel__header">
-        <h2 id="progress-title">学习进度</h2>
-        <button type="button" class="panel__close" aria-label="关闭" @click="$emit('close')">
-          ×
-        </button>
-      </header>
+      <div class="panel__top">
+        <header class="panel__header">
+          <h2 id="progress-title">学习进度</h2>
+          <button type="button" class="panel__close" aria-label="关闭" @click="$emit('close')">
+            ×
+          </button>
+        </header>
 
-      <div class="segment">
-        <button type="button" :class="{ active: tab === 'hiragana' }" @click="tab = 'hiragana'">
-          平假名
-        </button>
-        <button type="button" :class="{ active: tab === 'katakana' }" @click="tab = 'katakana'">
-          片假名
-        </button>
+        <div class="segment">
+          <button type="button" :class="{ active: tab === 'hiragana' }" @click="tab = 'hiragana'">
+            平假名
+          </button>
+          <button type="button" :class="{ active: tab === 'katakana' }" @click="tab = 'katakana'">
+            片假名
+          </button>
+        </div>
+
+        <p class="panel__summary">
+          已练 {{ summary.practiced }}/{{ summary.total }} · 学习 {{ summary.learning }} · 复习
+          {{ summary.review }} · 成熟 {{ summary.mature }}
+        </p>
+
+        <div class="legend" aria-hidden="true">
+          <span data-tone="idle">未练</span>
+          <span data-tone="learning">学习中</span>
+          <span data-tone="review">复习中</span>
+          <span data-tone="mature">成熟</span>
+          <span data-tone="weak">易错</span>
+        </div>
+
+        <section v-if="selected" class="detail" aria-live="polite">
+          <div class="detail__head">
+            <span class="detail__kana" lang="ja">{{ selected.kana }}</span>
+            <span class="detail__romaji">{{ selected.romaji }}</span>
+            <span class="detail__badge">{{ selected.stageLabel }}</span>
+          </div>
+          <p class="detail__due">下次复习：{{ selected.dueLabel }}</p>
+          <dl class="detail__stats">
+            <div>
+              <dt>正确</dt>
+              <dd>{{ selected.stats.correct }}</dd>
+            </div>
+            <div>
+              <dt>错误</dt>
+              <dd>{{ selected.stats.wrong }}</dd>
+            </div>
+            <div>
+              <dt>当前连对</dt>
+              <dd>{{ selected.stats.currentCorrect }}</dd>
+            </div>
+            <div>
+              <dt>当前连错</dt>
+              <dd>{{ selected.stats.currentWrong }}</dd>
+            </div>
+            <div>
+              <dt>最大连对</dt>
+              <dd>{{ selected.stats.maxCorrect }}</dd>
+            </div>
+            <div>
+              <dt>最大连错</dt>
+              <dd>{{ selected.stats.maxWrong }}</dd>
+            </div>
+          </dl>
+        </section>
+        <p v-else class="panel__hint">点选假名查看详细统计</p>
       </div>
 
-      <p class="panel__summary">
-        已练 {{ summary.practiced }}/{{ summary.total }} · 学习 {{ summary.learning }} · 复习
-        {{ summary.review }} · 成熟 {{ summary.mature }}
-      </p>
-
-      <div class="legend" aria-hidden="true">
-        <span data-tone="idle">未练</span>
-        <span data-tone="learning">学习中</span>
-        <span data-tone="review">复习中</span>
-        <span data-tone="mature">成熟</span>
-        <span data-tone="weak">易错</span>
-      </div>
-
-      <section v-for="section in GOJUUON_CHART" :key="section.id" class="chart">
-        <h3 class="chart__title">{{ section.title }}</h3>
-        <div
-          class="chart__grid"
-          :style="{ gridTemplateColumns: `repeat(${section.columns}, minmax(0, 1fr))` }"
-        >
+      <div class="panel__body">
+        <section v-for="section in GOJUUON_CHART" :key="section.id" class="chart">
+          <h3 class="chart__title">{{ section.title }}</h3>
           <div
-            v-for="header in section.headers"
-            :key="`${section.id}-h-${header}`"
-            class="chart__head"
+            class="chart__grid"
+            :style="{ gridTemplateColumns: `repeat(${section.columns}, minmax(0, 1fr))` }"
           >
-            {{ header }}
-          </div>
-          <template v-for="(row, rowIndex) in section.rows" :key="`${section.id}-${rowIndex}`">
-            <template
-              v-for="(cellId, colIndex) in row"
-              :key="`${section.id}-${rowIndex}-${colIndex}`"
+            <div
+              v-for="header in section.headers"
+              :key="`${section.id}-h-${header}`"
+              class="chart__head"
             >
-              <button
-                v-if="cellId"
-                type="button"
-                class="chart__cell"
-                :data-tone="cellTone(rowByKey.get(cellId))"
-                :data-selected="selectedKey === cellId"
-                :aria-pressed="selectedKey === cellId"
-                :aria-label="rowByKey.get(cellId)?.kana ?? cellId"
-                @click="selectCell(cellId)"
+              {{ header }}
+            </div>
+            <template v-for="(row, rowIndex) in section.rows" :key="`${section.id}-${rowIndex}`">
+              <template
+                v-for="(cellId, colIndex) in row"
+                :key="`${section.id}-${rowIndex}-${colIndex}`"
               >
-                <span class="chart__kana" lang="ja">{{ rowByKey.get(cellId)?.kana }}</span>
-                <span
-                  v-if="rowByKey.get(cellId)?.tone === 'weak'"
-                  class="chart__mark"
-                  aria-hidden="true"
-                />
-              </button>
-              <div v-else class="chart__blank" aria-hidden="true" />
+                <button
+                  v-if="cellId"
+                  type="button"
+                  class="chart__cell"
+                  :data-tone="cellTone(rowByKey.get(cellId))"
+                  :data-selected="selectedKey === cellId"
+                  :aria-pressed="selectedKey === cellId"
+                  :aria-label="rowByKey.get(cellId)?.kana ?? cellId"
+                  @click="selectCell(cellId)"
+                >
+                  <span class="chart__kana" lang="ja">{{ rowByKey.get(cellId)?.kana }}</span>
+                  <span
+                    v-if="rowByKey.get(cellId)?.tone === 'weak'"
+                    class="chart__mark"
+                    aria-hidden="true"
+                  />
+                </button>
+                <div v-else class="chart__blank" aria-hidden="true" />
+              </template>
             </template>
-          </template>
-        </div>
-      </section>
-
-      <section v-if="selected" class="detail" aria-live="polite">
-        <div class="detail__head">
-          <span class="detail__kana" lang="ja">{{ selected.kana }}</span>
-          <span class="detail__romaji">{{ selected.romaji }}</span>
-          <span class="detail__badge">{{ selected.stageLabel }}</span>
-        </div>
-        <p class="detail__due">下次复习：{{ selected.dueLabel }}</p>
-        <dl class="detail__stats">
-          <div>
-            <dt>正确</dt>
-            <dd>{{ selected.stats.correct }}</dd>
           </div>
-          <div>
-            <dt>错误</dt>
-            <dd>{{ selected.stats.wrong }}</dd>
-          </div>
-          <div>
-            <dt>当前连对</dt>
-            <dd>{{ selected.stats.currentCorrect }}</dd>
-          </div>
-          <div>
-            <dt>当前连错</dt>
-            <dd>{{ selected.stats.currentWrong }}</dd>
-          </div>
-          <div>
-            <dt>最大连对</dt>
-            <dd>{{ selected.stats.maxCorrect }}</dd>
-          </div>
-          <div>
-            <dt>最大连错</dt>
-            <dd>{{ selected.stats.maxWrong }}</dd>
-          </div>
-        </dl>
-      </section>
-      <p v-else class="panel__hint">点选假名查看详细统计</p>
+        </section>
+      </div>
     </aside>
   </div>
 </template>
@@ -201,17 +205,35 @@ function selectCell(entryId: string | null) {
 
 .panel__sheet {
   position: relative;
+  z-index: 1;
   width: min(480px, 100%);
   height: 100%;
   height: 100dvh;
   overflow: auto;
+  overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   background: #fffaf1;
   border-left: 1px solid rgba(45, 74, 62, 0.18);
-  padding: 1.1rem 0.85rem calc(1.75rem + env(safe-area-inset-bottom, 0px));
-  padding-right: max(0.85rem, env(safe-area-inset-right, 0px));
+  padding-bottom: calc(1.75rem + env(safe-area-inset-bottom, 0px));
   box-shadow: -12px 0 32px rgba(18, 28, 24, 0.12);
   animation: slide 220ms ease;
+}
+
+.panel__top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 1.1rem 0.85rem 0.75rem;
+  padding-top: calc(1.1rem + env(safe-area-inset-top, 0px));
+  padding-right: max(0.85rem, env(safe-area-inset-right, 0px));
+  background: #fffaf1;
+  border-bottom: 1px solid rgba(45, 74, 62, 0.12);
+  box-shadow: 0 8px 18px rgba(18, 28, 24, 0.04);
+}
+
+.panel__body {
+  padding: 0.85rem 0.85rem 0;
+  padding-right: max(0.85rem, env(safe-area-inset-right, 0px));
 }
 
 .panel__header {
@@ -219,7 +241,6 @@ function selectCell(entryId: string | null) {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.85rem;
-  padding-top: env(safe-area-inset-top, 0px);
 }
 
 .panel__header h2 {
@@ -278,7 +299,7 @@ function selectCell(entryId: string | null) {
   display: flex;
   flex-wrap: wrap;
   gap: 0.45rem;
-  margin-bottom: 1rem;
+  margin-bottom: 0.75rem;
 }
 
 .legend span {
@@ -389,15 +410,11 @@ function selectCell(entryId: string | null) {
 }
 
 .detail {
-  position: sticky;
-  bottom: 0;
-  margin-top: 0.35rem;
+  margin: 0;
   padding: 0.75rem 0.7rem 0.85rem;
   border: 1px solid rgba(45, 74, 62, 0.18);
   border-radius: 8px;
   background: rgba(255, 252, 245, 0.96);
-  box-shadow: 0 -8px 24px rgba(18, 28, 24, 0.06);
-  backdrop-filter: blur(6px);
 }
 
 .detail__head {
@@ -462,7 +479,7 @@ function selectCell(entryId: string | null) {
 }
 
 .panel__hint {
-  margin: 0.75rem 0 0;
+  margin: 0;
   text-align: center;
   font-size: 0.8rem;
   color: #8a9a92;

@@ -22,6 +22,9 @@
 *::before,
 *::after {
   box-sizing: border-box;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
 
 html,
@@ -34,12 +37,14 @@ body,
 html {
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  touch-action: manipulation;
 }
 
 body {
   margin: 0;
   min-width: 320px;
   overscroll-behavior: none;
+  touch-action: manipulation;
   background:
     radial-gradient(ellipse at 20% 0%, rgba(61, 122, 94, 0.12), transparent 45%),
     radial-gradient(ellipse at 90% 10%, rgba(168, 112, 64, 0.1), transparent 40%),
@@ -50,6 +55,12 @@ body {
 button,
 input {
   font: inherit;
+}
+
+/* Allow editing the daily-new-cards number in settings */
+input {
+  -webkit-user-select: text;
+  user-select: text;
 }
 
 button:focus-visible,

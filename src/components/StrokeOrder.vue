@@ -11,16 +11,17 @@ const props = defineProps<{
   playToken?: number;
 }>();
 
-const bust = ref(0);
 const failed = ref(false);
+const remountKey = ref(0);
 
 const resolved = computed(() => resolveStrokeAssets(props.entryId, props.script));
-const gifUrls = computed(() => resolved.value.urls.map((url) => `${url}?r=${bust.value}`));
+/** Stable URLs — do not append cache-bust query params (defeats SW / HTTP cache). */
+const gifUrls = computed(() => resolved.value.urls);
 
 watch(
   () => [props.entryId, props.script, props.playToken] as const,
   () => {
-    bust.value += 1;
+    remountKey.value += 1;
     failed.value = false;
   },
   { immediate: true },
@@ -36,10 +37,11 @@ function onImgError() {
     <template v-if="!failed && gifUrls.length">
       <img
         v-for="(url, index) in gifUrls"
-        :key="url"
+        :key="`${remountKey}-${index}-${url}`"
         class="stroke__gif"
         :src="url"
         :alt="`${kana} 笔顺 ${index + 1}`"
+        decoding="async"
         @error="onImgError"
       />
     </template>

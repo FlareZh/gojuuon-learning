@@ -203,3 +203,41 @@ export function resolveStrokeAssets(entryId: string, script: ScriptKind): Stroke
 export function isSeionStrokeId(id: string): boolean {
   return SEION_SET.has(id);
 }
+
+/** Unique stroke GIF URLs for a practice round (both scripts if dual). */
+export function strokeUrlsForRound(entryId: string, scripts: ScriptKind[]): string[] {
+  const seen = new Set<string>();
+  const urls: string[] = [];
+  for (const script of scripts) {
+    for (const url of resolveStrokeAssets(entryId, script).urls) {
+      if (seen.has(url)) continue;
+      seen.add(url);
+      urls.push(url);
+    }
+  }
+  return urls;
+}
+
+/**
+ * Warm HTTP + SW caches for stroke GIFs while the user is still drawing.
+ * Idempotent; safe to call on every card change.
+ */
+export function prefetchStrokeUrls(urls: string[]): void {
+  for (const url of urls) {
+    void fetch(url, { credentials: "same-origin", mode: "same-origin" }).catch(() => {
+      /* ignore; img will retry on review */
+    });
+  }
+}
+
+/** All vendored 清音 GIF paths (~820KB total) — for idle warm-up. */
+export function allSeionStrokeUrls(): string[] {
+  const scripts: ScriptKind[] = ["hiragana", "katakana"];
+  const urls: string[] = [];
+  for (const script of scripts) {
+    for (const id of SEION_IDS) {
+      urls.push(gifPath(script, id));
+    }
+  }
+  return urls;
+}

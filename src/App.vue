@@ -1,11 +1,16 @@
 <script setup lang="ts">
-import { computed, nextTick, onUnmounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
 import DrawingBoard from "@/components/DrawingBoard.vue";
 import ProgressPanel from "@/components/ProgressPanel.vue";
 import SettingsPanel from "@/components/SettingsPanel.vue";
 import StrokeOrder from "@/components/StrokeOrder.vue";
 import { usePractice } from "@/composables/usePractice";
 import type { ScriptKind } from "@/data/gojuuon";
+import {
+  allSeionStrokeUrls,
+  prefetchStrokeUrls,
+  strokeUrlsForRound,
+} from "@/data/strokeAssets";
 
 type Phase = "draw" | "review";
 
@@ -65,6 +70,28 @@ watch(
     resetRoundUi();
   },
 );
+
+watch(
+  () => {
+    const round = current.value;
+    if (!round) return "";
+    return `${round.entry.id}|${round.scripts.join(",")}`;
+  },
+  (key) => {
+    if (!key || !current.value) return;
+    prefetchStrokeUrls(strokeUrlsForRound(current.value.entry.id, current.value.scripts));
+  },
+  { immediate: true },
+);
+
+onMounted(() => {
+  const warm = () => prefetchStrokeUrls(allSeionStrokeUrls());
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(warm, { timeout: 4000 });
+  } else {
+    window.setTimeout(warm, 1200);
+  }
+});
 
 function submit() {
   clearAdvanceTimer();

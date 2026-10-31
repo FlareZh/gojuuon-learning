@@ -48,11 +48,12 @@ export default defineConfig({
         ],
       },
       workbox: {
-        // App shell; stroke GIFs use runtime cache (too many for precache).
-        globPatterns: ["**/*.{js,css,html,ico,svg,png,woff2,webmanifest}"],
+        // App shell + stroke GIFs (~820KB / 92 files — fine to precache).
+        globPatterns: ["**/*.{js,css,html,ico,svg,png,gif,woff2,webmanifest}"],
         navigateFallback: `${BASE}index.html`,
         runtimeCaching: [
           {
+            // Fallback for any stroke URL not yet in the precache (e.g. older SW).
             urlPattern: ({ url }) => url.pathname.startsWith(`${BASE}strokes/`),
             handler: "CacheFirst",
             options: {

@@ -62,6 +62,22 @@ export function isDue(stats: ItemStats, now: number): boolean {
   return stats.dueAt <= now;
 }
 
+/** Introduced into today's queue but not yet graded (still counts for rebuild, not for "到期"). */
+export function isIntroducedPending(stats: ItemStats): boolean {
+  return (
+    stats.stage === 0 &&
+    stats.dueAt != null &&
+    stats.correct === 0 &&
+    stats.wrong === 0 &&
+    stats.lastReviewedAt == null
+  );
+}
+
+/** Due for review display / empty-state: excludes brand-new cards only stamped into today's quota. */
+export function isReviewDue(stats: ItemStats, now: number): boolean {
+  return isDue(stats, now) && !isIntroducedPending(stats);
+}
+
 /** Progress chart tone: idle | learning | review | mature | weak */
 export function progressTone(stats: ItemStats): string {
   if (stats.currentWrong > 0 || (stats.wrong > stats.correct && stats.wrong > 0)) {

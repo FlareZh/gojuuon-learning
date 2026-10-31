@@ -12,6 +12,7 @@ import {
   formatDue,
   isDue,
   isNewCard,
+  isReviewDue,
   localDateKey,
   migrateStatsMap,
   progressTone,
@@ -61,6 +62,8 @@ export interface SessionSnapshot {
   date: string;
   newIntroduced: number;
   reviewedCount: number;
+  /** Don't show key again until reviewedCount reaches this (wrong-card spacing). */
+  buryUntil: Record<string, number>;
 }
 
 const DEFAULT_SETTINGS: PracticeSettings = {
@@ -70,11 +73,15 @@ const DEFAULT_SETTINGS: PracticeSettings = {
   enabledGroups: ["seion", "dakuon", "handakuon", "youon"],
 };
 
+/** Other cards to grade before a wrong card can reappear in this session. */
+const WRONG_REQUEUE_GAP = 3;
+
 const EMPTY_SESSION: SessionSnapshot = {
   queue: [],
   date: "",
   newIntroduced: 0,
   reviewedCount: 0,
+  buryUntil: {},
 };
 
 export function itemKey(entryId: string, script: ScriptKind): string {
@@ -149,6 +156,11 @@ export function usePractice() {
     settings.value as PracticeSettings & { hideAfterCorrect?: number },
   );
   stats.value = migrateStatsMap(stats.value);
+  session.value = {
+    ...EMPTY_SESSION,
+    ...session.value,
+    buryUntil: session.value.buryUntil ?? {},
+  };
 
   const current = ref<PracticeRound | null>(null);
 
@@ -179,12 +191,23 @@ export function usePractice() {
     const today = localDateKey(now);
     if (session.value.date !== today) {
       session.value = {
-        queue: [],
+        ...EMPTY_SESSION,
         date: today,
-        newIntroduced: 0,
-        reviewedCount: 0,
       };
     }
+  }
+
+  function isBuried(key: string): boolean {
+    const until = session.value.buryUntil?.[key];
+    return until != null && until > session.value.reviewedCount;
+  }
+
+  function clearBury(key: string) {
+    const buryUntil = session.value.buryUntil;
+    if (!buryUntil || buryUntil[key] == null) return;
+    const next = { ...buryUntil };
+    delete next[key];
+    session.value = { ...session.value, buryUntil: next };
   }
 
   function sortOrShuffle(keys: string[]): string[] {
@@ -195,40 +218,14 @@ export function usePractice() {
     return copy.sort((a, b) => compareCardKeys(a, b, entryById.value));
   }
 
+  /** Due / in-progress cards only. New cards are introduced one at a time when shown. */
   function buildSessionQueue(now = Date.now()): string[] {
     ensureSessionDay(now);
-    const keys = allCardKeys();
     const due: string[] = [];
-    const fresh: string[] = [];
-
-    for (const key of keys) {
-      const s = getStats(key);
-      if (isDue(s, now)) due.push(key);
-      else if (isNewCard(s)) fresh.push(key);
+    for (const key of allCardKeys()) {
+      if (isDue(getStats(key), now)) due.push(key);
     }
-
-    const dueSorted = sortOrShuffle(due);
-    const freshSorted = sortOrShuffle(fresh);
-    const remainingNew = Math.max(0, settings.value.newCardsPerDay - session.value.newIntroduced);
-    const newBatch = freshSorted.slice(0, remainingNew);
-
-    // Mark introduced new cards so quota persists across rebuilds today.
-    if (newBatch.length > 0) {
-      const nextStats = { ...stats.value };
-      for (const key of newBatch) {
-        const prev = getStats(key);
-        if (prev.dueAt == null) {
-          nextStats[key] = { ...prev, dueAt: now };
-        }
-      }
-      stats.value = nextStats;
-      session.value = {
-        ...session.value,
-        newIntroduced: session.value.newIntroduced + newBatch.length,
-      };
-    }
-
-    return [...dueSorted, ...newBatch];
+    return sortOrShuffle(due);
   }
 
   function refillQueueIfNeeded(now = Date.now()) {
@@ -238,6 +235,50 @@ export function usePractice() {
       ...session.value,
       queue: buildSessionQueue(now),
     };
+  }
+
+  /** Pull the next never-seen card into play and spend one of today's new-card slots. */
+  function introduceNextNewCard(
+    now = Date.now(),
+    excludeEntryId?: string,
+  ): PracticeRound | null {
+    ensureSessionDay(now);
+    const remainingNew = Math.max(0, settings.value.newCardsPerDay - session.value.newIntroduced);
+    if (remainingNew <= 0) return null;
+
+    const fresh: string[] = [];
+    for (const key of allCardKeys()) {
+      if (isNewCard(getStats(key))) fresh.push(key);
+    }
+    if (fresh.length === 0) return null;
+
+    const preferred = excludeEntryId
+      ? fresh.filter((key) => parseItemKey(key)?.entryId !== excludeEntryId)
+      : fresh;
+    const nextKey = sortOrShuffle(preferred.length > 0 ? preferred : fresh)[0];
+    if (!nextKey) return null;
+
+    const parsed = parseItemKey(nextKey);
+    if (!parsed) return null;
+    const entry = entryById.value.get(parsed.entryId);
+    if (!entry) return null;
+
+    const modeScripts = scriptsForMode(settings.value.scriptMode);
+    const script = modeScripts.includes(parsed.script)
+      ? parsed.script
+      : (modeScripts[0] ?? parsed.script);
+
+    const prev = getStats(nextKey);
+    stats.value = {
+      ...stats.value,
+      [nextKey]: { ...prev, dueAt: now },
+    };
+    session.value = {
+      ...session.value,
+      newIntroduced: session.value.newIntroduced + 1,
+    };
+
+    return { entry, scripts: [script] };
   }
 
   /** One queue card = one script; never merge 平/片 into a dual round. */
@@ -251,7 +292,10 @@ export function usePractice() {
     while (guard++ < 5000) {
       if (session.value.queue.length === 0) {
         refillQueueIfNeeded(now);
-        if (session.value.queue.length === 0) return null;
+        if (session.value.queue.length === 0) {
+          // No due reviews left — reveal the next new card (decrements 新卡剩余).
+          return introduceNextNewCard(now, excludeEntryId);
+        }
       }
 
       const firstKey = session.value.queue[0];
@@ -266,15 +310,23 @@ export function usePractice() {
         continue;
       }
 
-      if (excludeEntryId && parsed.entryId === excludeEntryId) {
-        // Defer same entry (e.g. wrong-card requeue) until later in the session.
-        if (rotated.has(firstKey)) return null;
-        rotated.add(firstKey);
-        session.value = {
-          ...session.value,
-          queue: [...session.value.queue.slice(1), firstKey],
-        };
-        continue;
+      const blockedByExclude = Boolean(excludeEntryId && parsed.entryId === excludeEntryId);
+      const blockedByBury = isBuried(firstKey);
+
+      if (blockedByExclude || blockedByBury) {
+        // Defer same entry / recently-wrong card; prefer other due cards or a new card.
+        if (rotated.has(firstKey)) {
+          const introduced = introduceNextNewCard(now, excludeEntryId);
+          if (introduced) return introduced;
+          // Nothing else left today — still retry unresolved wrongs instead of ending.
+        } else {
+          rotated.add(firstKey);
+          session.value = {
+            ...session.value,
+            queue: [...session.value.queue.slice(1), firstKey],
+          };
+          continue;
+        }
       }
 
       const entry = entryById.value.get(parsed.entryId);
@@ -287,6 +339,7 @@ export function usePractice() {
         ...session.value,
         queue: session.value.queue.slice(1),
       };
+      clearBury(firstKey);
 
       const script = modeScripts.includes(parsed.script)
         ? parsed.script
@@ -353,16 +406,26 @@ export function usePractice() {
     stats.value = { ...stats.value, [key]: next };
 
     ensureSessionDay(now);
+    const reviewedCount = session.value.reviewedCount + 1;
     session.value = {
       ...session.value,
-      reviewedCount: session.value.reviewedCount + 1,
+      reviewedCount,
     };
 
-    // Wrong: requeue at end for same-session retry.
+    // Wrong: come back later this session, but not as the very next cards.
     if (!correct) {
       const q = session.value.queue.filter((k) => k !== key);
       q.push(key);
-      session.value = { ...session.value, queue: q };
+      session.value = {
+        ...session.value,
+        queue: q,
+        buryUntil: {
+          ...(session.value.buryUntil ?? {}),
+          [key]: reviewedCount + WRONG_REQUEUE_GAP,
+        },
+      };
+    } else {
+      clearBury(key);
     }
   }
 
@@ -419,7 +482,7 @@ export function usePractice() {
 
   const dueCount = computed(() => {
     const now = Date.now();
-    return allCardKeys().filter((key) => isDue(getStats(key), now)).length;
+    return allCardKeys().filter((key) => isReviewDue(getStats(key), now)).length;
   });
 
   const newRemainingToday = computed(() =>

@@ -33,7 +33,13 @@ function onImgError() {
 </script>
 
 <template>
-  <div class="stroke" :class="{ 'stroke--split': !failed && gifUrls.length > 1 }">
+  <div
+    class="stroke"
+    :class="[
+      `stroke--${script}`,
+      { 'stroke--split': !failed && gifUrls.length > 1 },
+    ]"
+  >
     <template v-if="!failed && gifUrls.length">
       <img
         v-for="(url, index) in gifUrls"
@@ -57,10 +63,18 @@ function onImgError() {
   display: grid;
   place-items: center;
   border-radius: 4px;
-  border: 1px solid rgba(45, 74, 62, 0.18);
-  background: #fffaf1;
   overflow: hidden;
   padding: 0.35rem;
+}
+
+.stroke--hiragana {
+  border: 1px solid var(--board-hira-border);
+  background: var(--board-hira);
+}
+
+.stroke--katakana {
+  border: 1px solid var(--board-kata-border);
+  background: var(--board-kata);
 }
 
 .stroke--split {
@@ -97,7 +111,7 @@ function onImgError() {
   line-height: 1.25;
   text-align: center;
   color: #5a6d64;
-  background: linear-gradient(180deg, transparent, rgba(255, 250, 241, 0.92) 35%);
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.88) 35%);
 }
 
 .stroke--split .stroke__note {

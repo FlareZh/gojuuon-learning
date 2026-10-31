@@ -130,11 +130,19 @@ function onGrade(script: ScriptKind, correct: boolean) {
 
 onUnmounted(clearAdvanceTimer);
 
-const promptLabel = computed(() => {
+/** Single-script rounds tint the prompt; dual keeps a neutral both state. */
+const promptScript = computed(() => {
   const scripts = activeScripts.value;
-  if (scripts.length === 0) return "";
-  if (scripts.length === 1) return `请写出对应的${scriptLabel(scripts[0]!)}`;
-  return "请分别写出平假名与片假名";
+  if (scripts.length === 1) return scripts[0]!;
+  if (scripts.length > 1) return "both" as const;
+  return null;
+});
+
+const promptScriptTitle = computed(() => {
+  const script = promptScript.value;
+  if (script === "hiragana" || script === "katakana") return scriptLabel(script);
+  if (script === "both") return "平假名 · 片假名";
+  return "";
 });
 </script>
 
@@ -153,9 +161,15 @@ const promptLabel = computed(() => {
 
     <main class="stage">
       <template v-if="current">
-        <section class="prompt" aria-live="polite">
-          <p class="prompt__label">{{ promptLabel }}</p>
+        <section
+          class="prompt"
+          :key="`${current.entry.id}-${activeScripts.join(',')}`"
+          :data-script="promptScript ?? undefined"
+          aria-live="polite"
+        >
+          <p class="prompt__script">{{ promptScriptTitle }}</p>
           <p class="prompt__romaji">{{ current.entry.romaji }}</p>
+          <p class="prompt__hint">在下方田字格中书写</p>
         </section>
 
         <!-- Draw phase -->
@@ -167,7 +181,7 @@ const promptLabel = computed(() => {
               :ref="(el) => setBoardRef(script, el)"
               :clear-token="clearToken"
               :script="script"
-              :label="scriptLabel(script)"
+              :label="dual ? scriptLabel(script) : ''"
               :compact="dual"
             />
           </section>
@@ -335,23 +349,73 @@ const promptLabel = computed(() => {
 
 .prompt {
   text-align: center;
+  padding: 0.85rem 1rem 0.95rem;
+  border-radius: 6px;
+  border: 1px solid transparent;
   animation: settle 320ms ease;
 }
 
-.prompt__label {
+.prompt[data-script="hiragana"] {
+  border-color: var(--board-hira-border);
+  background: linear-gradient(180deg, var(--board-hira), var(--board-hira-deep));
+}
+
+.prompt[data-script="katakana"] {
+  border-color: var(--board-kata-border);
+  background: linear-gradient(180deg, var(--board-kata), var(--board-kata-deep));
+}
+
+.prompt[data-script="both"] {
+  border-color: rgba(45, 74, 62, 0.22);
+  background: linear-gradient(90deg, var(--board-hira) 0%, var(--board-kata) 100%);
+}
+
+.prompt__script {
   margin: 0;
-  font-size: 0.86rem;
-  color: #5a6d64;
+  font-size: clamp(1.05rem, 4.6vw, 1.4rem);
+  font-weight: 700;
+  letter-spacing: 0.28em;
+  line-height: 1.2;
+  text-indent: 0.28em;
+}
+
+.prompt[data-script="hiragana"] .prompt__script {
+  color: #8a5a2b;
+}
+
+.prompt[data-script="katakana"] .prompt__script {
+  color: #2f6a7c;
+}
+
+.prompt[data-script="both"] .prompt__script {
+  color: #2d4a3e;
+  letter-spacing: 0.12em;
+  text-indent: 0;
 }
 
 .prompt__romaji {
-  margin: 0.3rem 0 0;
+  margin: 0.45rem 0 0;
   font-family: "Source Serif 4", "Noto Serif", Georgia, serif;
   font-size: clamp(2.2rem, 11vw, 3.4rem);
   font-weight: 600;
   color: #1a2e26;
   letter-spacing: 0.04em;
   line-height: 1;
+}
+
+.prompt__hint {
+  margin: 0.45rem 0 0;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  color: #5a6d64;
+}
+
+.prompt[data-script="hiragana"] .prompt__hint {
+  color: rgba(138, 90, 43, 0.78);
+}
+
+.prompt[data-script="katakana"] .prompt__hint {
+  color: rgba(47, 106, 124, 0.78);
 }
 
 .boards {

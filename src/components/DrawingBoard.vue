@@ -1,18 +1,25 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import type { ScriptKind } from "@/data/gojuuon";
 
 const props = withDefaults(
   defineProps<{
     clearToken: number;
+    script?: ScriptKind;
     label?: string;
     readonly?: boolean;
     compact?: boolean;
   }>(),
   {
+    script: "hiragana",
     label: "",
     readonly: false,
     compact: false,
   },
+);
+
+const guideStroke = computed(() =>
+  props.script === "katakana" ? "rgba(40, 96, 120, 0.22)" : "rgba(140, 96, 48, 0.22)",
 );
 
 const frameRef = ref<HTMLElement | null>(null);
@@ -68,7 +75,7 @@ function drawGuides() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.clearRect(0, 0, w, h);
   ctx.save();
-  ctx.strokeStyle = "rgba(45, 74, 62, 0.18)";
+  ctx.strokeStyle = guideStroke.value;
   ctx.lineWidth = 1;
   ctx.setLineDash([6, 6]);
   ctx.beginPath();
@@ -134,6 +141,13 @@ watch(
   () => clear(),
 );
 
+watch(
+  () => props.script,
+  () => {
+    if (!drawing.value) clear();
+  },
+);
+
 onMounted(async () => {
   await nextTick();
   sizeCanvas();
@@ -160,7 +174,13 @@ defineExpose({ clear, getSnapshot });
 </script>
 
 <template>
-  <div class="board" :class="{ 'board--compact': compact, 'board--readonly': readonly }">
+  <div
+    class="board"
+    :class="[
+      `board--${script}`,
+      { 'board--compact': compact, 'board--readonly': readonly },
+    ]"
+  >
     <p v-if="label" class="board__label">{{ label }}</p>
     <div ref="frameRef" class="board__frame">
       <canvas
@@ -188,9 +208,16 @@ defineExpose({ clear, getSnapshot });
 .board__label {
   margin: 0;
   font-size: 0.82rem;
-  color: #5a6d64;
   letter-spacing: 0.06em;
   text-align: center;
+}
+
+.board--hiragana .board__label {
+  color: #8a5a2b;
+}
+
+.board--katakana .board__label {
+  color: #2f6a7c;
 }
 
 .board__frame {
@@ -200,12 +227,22 @@ defineExpose({ clear, getSnapshot });
   aspect-ratio: 1;
   margin-inline: auto;
   border-radius: 4px;
-  border: 1px solid rgba(45, 74, 62, 0.22);
   overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(255, 252, 245, 0.95), rgba(245, 238, 224, 0.98)),
-    repeating-linear-gradient(0deg, transparent, transparent 23px, rgba(45, 74, 62, 0.04) 24px);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+
+.board--hiragana .board__frame {
+  border: 1px solid var(--board-hira-border);
+  background:
+    linear-gradient(180deg, var(--board-hira), var(--board-hira-deep)),
+    repeating-linear-gradient(0deg, transparent, transparent 23px, var(--board-hira-line) 24px);
+}
+
+.board--katakana .board__frame {
+  border: 1px solid var(--board-kata-border);
+  background:
+    linear-gradient(180deg, var(--board-kata), var(--board-kata-deep)),
+    repeating-linear-gradient(0deg, transparent, transparent 23px, var(--board-kata-line) 24px);
 }
 
 .board--compact .board__frame {
@@ -235,9 +272,6 @@ defineExpose({ clear, getSnapshot });
   right: 8px;
   bottom: 8px;
   z-index: 1;
-  border: 1px solid rgba(45, 74, 62, 0.28);
-  background: rgba(255, 252, 245, 0.92);
-  color: #2d4a3e;
   font: inherit;
   font-size: 0.78rem;
   padding: 0.3rem 0.6rem;
@@ -245,7 +279,19 @@ defineExpose({ clear, getSnapshot });
   cursor: pointer;
 }
 
+.board--hiragana .board__clear {
+  border: 1px solid var(--board-hira-border);
+  background: rgba(255, 246, 232, 0.92);
+  color: #8a5a2b;
+}
+
+.board--katakana .board__clear {
+  border: 1px solid var(--board-kata-border);
+  background: rgba(232, 241, 244, 0.92);
+  color: #2f6a7c;
+}
+
 .board__clear:hover {
-  background: #fff;
+  filter: brightness(1.04);
 }
 </style>

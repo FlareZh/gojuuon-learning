@@ -7,6 +7,15 @@
   --paper: #f3ebe0;
   --paper-deep: #e7dccb;
   --accent: #2d4a3e;
+  /* 田字格：平假名偏暖、片假名偏冷，避免写错字体 */
+  --board-hira: #fff6e8;
+  --board-hira-deep: #f0e0c8;
+  --board-hira-line: rgba(140, 96, 48, 0.22);
+  --board-hira-border: rgba(140, 96, 48, 0.28);
+  --board-kata: #e8f1f4;
+  --board-kata-deep: #d4e4ea;
+  --board-kata-line: rgba(40, 96, 120, 0.22);
+  --board-kata-border: rgba(40, 96, 120, 0.28);
   font-family: "Noto Serif SC", "Source Serif 4", "Songti SC", "PingFang SC", serif;
   line-height: 1.5;
   font-weight: 500;

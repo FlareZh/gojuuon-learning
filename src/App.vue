@@ -166,6 +166,7 @@ const promptLabel = computed(() => {
               :key="script"
               :ref="(el) => setBoardRef(script, el)"
               :clear-token="clearToken"
+              :script="script"
               :label="scriptLabel(script)"
               :compact="dual"
             />
@@ -182,7 +183,7 @@ const promptLabel = computed(() => {
             <article v-for="script in activeScripts" :key="script" class="review">
               <h2 class="review__title">{{ scriptLabel(script) }}</h2>
               <div class="review__compare">
-                <figure class="review__pane">
+                <figure class="review__pane" :data-script="script">
                   <figcaption>你的写法</figcaption>
                   <img
                     v-if="snapshots[script]"
@@ -192,7 +193,7 @@ const promptLabel = computed(() => {
                   />
                   <div v-else class="review__empty">未书写</div>
                 </figure>
-                <figure class="review__pane">
+                <figure class="review__pane" :data-script="script">
                   <figcaption>正确写法</figcaption>
                   <StrokeOrder
                     :kana="kanaFor(script)"
@@ -417,24 +418,34 @@ const promptLabel = computed(() => {
   text-align: center;
 }
 
+.review__shot,
+.review__empty {
+  aspect-ratio: 1;
+  border-radius: 4px;
+}
+
 .review__shot {
   width: 100%;
-  aspect-ratio: 1;
   object-fit: contain;
-  border-radius: 4px;
-  border: 1px solid rgba(45, 74, 62, 0.18);
-  background: #fffaf1;
 }
 
 .review__empty {
-  aspect-ratio: 1;
   display: grid;
   place-items: center;
-  border-radius: 4px;
-  border: 1px solid rgba(45, 74, 62, 0.18);
-  background: #fffaf1;
   font-size: 0.8rem;
   color: #8a9a92;
+}
+
+.review__pane[data-script="hiragana"] .review__shot,
+.review__pane[data-script="hiragana"] .review__empty {
+  border: 1px solid var(--board-hira-border);
+  background: var(--board-hira);
+}
+
+.review__pane[data-script="katakana"] .review__shot,
+.review__pane[data-script="katakana"] .review__empty {
+  border: 1px solid var(--board-kata-border);
+  background: var(--board-kata);
 }
 
 .review__grade {

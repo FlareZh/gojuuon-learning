@@ -7,15 +7,9 @@ const props = withDefaults(
   defineProps<{
     clearToken: number;
     script?: ScriptKind;
-    label?: string;
-    readonly?: boolean;
-    compact?: boolean;
   }>(),
   {
     script: "hiragana",
-    label: "",
-    readonly: false,
-    compact: false,
   },
 );
 
@@ -52,7 +46,7 @@ function applyStrokeStyle() {
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.lineWidth = props.compact ? CANVAS.lineWidthCompact : CANVAS.lineWidthNormal;
+  ctx.lineWidth = CANVAS.lineWidthNormal;
   ctx.strokeStyle = CANVAS.inkColor;
   ctx.setLineDash([]);
 }
@@ -204,7 +198,7 @@ function releaseAllPointers() {
  * @副作用 改历史、指针集、drawing 状态
  */
 function performTwoFingerUndo() {
-  if (props.readonly || undoGestureActive) return;
+  if (undoGestureActive) return;
 
   const hadInkInProgress = drawing.value && strokeDirty;
   if (drawing.value) {
@@ -243,7 +237,6 @@ function pointerPos(event: PointerEvent) {
  * @副作用 捕获指针、改 drawing 状态
  */
 function onPointerDown(event: PointerEvent) {
-  if (props.readonly) return;
   const canvas = canvasRef.value;
   if (!canvas || !ctx) return;
 
@@ -272,7 +265,7 @@ function onPointerDown(event: PointerEvent) {
  * @副作用 在 canvas 上描线
  */
 function onPointerMove(event: PointerEvent) {
-  if (props.readonly || !drawing.value || !ctx || undoGestureActive) return;
+  if (!drawing.value || !ctx || undoGestureActive) return;
   if (!activePointers.has(event.pointerId)) return;
   const { x, y } = pointerPos(event);
   strokeDirty = true;
@@ -311,7 +304,6 @@ function onPointerUp(event: PointerEvent) {
  * @副作用 可能阻止默认缩放并撤销
  */
 function onTouchStart(event: TouchEvent) {
-  if (props.readonly) return;
   if (event.touches.length < 2) return;
   event.preventDefault();
   performTwoFingerUndo();
@@ -382,22 +374,17 @@ defineExpose({ clear, getSnapshot });
 </script>
 
 <template>
-  <div
-    class="board"
-    :class="[`board--${script}`, { 'board--compact': compact, 'board--readonly': readonly }]"
-  >
-    <p v-if="label" class="board__label">{{ label }}</p>
+  <div class="board" :class="`board--${script}`">
     <div ref="frameRef" class="board__frame">
       <canvas
         ref="canvasRef"
         class="board__canvas"
-        :class="{ 'board__canvas--readonly': readonly }"
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
         @pointercancel="onPointerUp"
       />
-      <button v-if="!readonly" type="button" class="board__clear" @click="clear">清除</button>
+      <button type="button" class="board__clear" @click="clear">清除</button>
     </div>
   </div>
 </template>
@@ -408,21 +395,6 @@ defineExpose({ clear, getSnapshot });
   flex-direction: column;
   gap: 0.4rem;
   min-width: 0;
-}
-
-.board__label {
-  margin: 0;
-  font-size: 0.82rem;
-  letter-spacing: 0.06em;
-  text-align: center;
-}
-
-.board--hiragana .board__label {
-  color: #8a5a2b;
-}
-
-.board--katakana .board__label {
-  color: #2f6a7c;
 }
 
 .board__frame {
@@ -450,10 +422,6 @@ defineExpose({ clear, getSnapshot });
     repeating-linear-gradient(0deg, transparent, transparent 23px, var(--board-kata-line) 24px);
 }
 
-.board--compact .board__frame {
-  width: min(100%, 280px);
-}
-
 .board__canvas {
   position: absolute;
   inset: 0;
@@ -465,11 +433,6 @@ defineExpose({ clear, getSnapshot });
   background: transparent;
   touch-action: none;
   cursor: crosshair;
-}
-
-.board__canvas--readonly {
-  cursor: default;
-  pointer-events: none;
 }
 
 .board__clear {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { KanaGroup } from "@/data/gojuuon";
 import type { OrderMode, PracticeSettings, ScriptMode } from "@/composables/usePractice";
+import { FEEDBACK_ISSUES_URL } from "@/constants/links";
+import type { KanaGroup } from "@/data/gojuuon";
 
 const props = defineProps<{
   open: boolean;
@@ -161,6 +162,14 @@ function toggleGroup(group: KanaGroup) {
         </p>
       </section>
 
+      <a
+        class="sheet__feedback"
+        :href="FEEDBACK_ISSUES_URL"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        反馈 / Issues
+      </a>
       <button type="button" class="sheet__reset" @click="$emit('reset')">重置进度</button>
     </aside>
   </div>
@@ -316,9 +325,31 @@ function toggleGroup(group: KanaGroup) {
   background: rgba(45, 74, 62, 0.06);
 }
 
-.sheet__reset {
+.sheet__feedback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
   width: 100%;
   margin-top: 0.5rem;
+  min-height: 2.5rem;
+  border: 1px solid rgba(45, 74, 62, 0.28);
+  border-radius: 4px;
+  background: transparent;
+  color: #2d4a3e;
+  font: inherit;
+  font-size: 0.9rem;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.sheet__feedback:hover {
+  background: rgba(45, 74, 62, 0.06);
+}
+
+.sheet__reset {
+  width: 100%;
+  margin-top: 0.55rem;
   border: 1px solid rgba(140, 56, 48, 0.35);
   background: rgba(140, 56, 48, 0.06);
   color: #8c3830;

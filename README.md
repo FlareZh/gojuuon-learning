@@ -13,6 +13,14 @@ Vue 3 + Vite + TypeScript 五十音手写练习。罗马音提示，画板书写
 
 界面文案为简体中文；学习内容为 romaji + 假名。
 
+## 反馈 / Issues
+
+欢迎通过 [GitHub Issues](https://github.com/FlareZh/gojuuon-learning/issues) 反馈问题与建议。应用内设置面板与页脚也提供同一入口。
+
+## 许可
+
+本项目以 [MIT License](./LICENSE) 发布。Copyright (c) 2026 FlareZh。
+
 ## 间隔规则（阶段阶梯）
 
 每个「假名 × 字体」独立排程（非 FSRS）：

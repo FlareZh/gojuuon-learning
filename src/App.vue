@@ -5,12 +5,9 @@ import ProgressPanel from "@/components/ProgressPanel.vue";
 import SettingsPanel from "@/components/SettingsPanel.vue";
 import StrokeOrder from "@/components/StrokeOrder.vue";
 import { usePractice } from "@/composables/usePractice";
+import { FEEDBACK_ISSUES_URL } from "@/constants/links";
 import type { ScriptKind } from "@/data/gojuuon";
-import {
-  allSeionStrokeUrls,
-  prefetchStrokeUrls,
-  strokeUrlsForRound,
-} from "@/data/strokeAssets";
+import { allSeionStrokeUrls, prefetchStrokeUrls, strokeUrlsForRound } from "@/data/strokeAssets";
 
 type Phase = "draw" | "review";
 
@@ -255,6 +252,10 @@ const promptScriptTitle = computed(() => {
       </section>
     </main>
 
+    <footer class="app-footer">
+      <a :href="FEEDBACK_ISSUES_URL" target="_blank" rel="noopener noreferrer">反馈 / Issues</a>
+    </footer>
+
     <SettingsPanel
       :open="settingsOpen"
       :settings="settings"
@@ -345,6 +346,24 @@ const promptScriptTitle = computed(() => {
   flex-direction: column;
   gap: 0.85rem;
   min-width: 0;
+}
+
+.app-footer {
+  margin-top: 0.85rem;
+  text-align: center;
+}
+
+.app-footer a {
+  font-size: 0.78rem;
+  color: #5a6d64;
+  text-decoration: none;
+  letter-spacing: 0.04em;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.app-footer a:hover {
+  color: #2d4a3e;
+  text-decoration: underline;
 }
 
 .prompt {

@@ -1,12 +1,16 @@
-/** Gojuuon chart layouts: entry ids, `null` = empty cell. */
+/**
+ * 五十音进度图布局数据：单元格为假名 id，`null` 表示空位。
+ * （纯数据表，无业务魔法数。）
+ */
 
 export type ChartCellId = string | null;
 
+/** 进度图中的一个分区（清音 / 浊音 / 半浊音 / 拗音） */
 export interface ChartSection {
   id: string;
   title: string;
   columns: number;
-  /** Column headers (romaji vowel / youon endings). */
+  /** 列头（元音或拗音 ya/yu/yo） */
   headers: string[];
   rows: ChartCellId[][];
 }

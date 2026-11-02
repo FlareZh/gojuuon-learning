@@ -7,7 +7,7 @@ const props = defineProps<{
   kana: string;
   entryId: string;
   script: ScriptKind;
-  /** Bump to restart GIF playback (e.g. when entering review). */
+  /** 递增以强制重新挂载 GIF（进入对照阶段时） */
   playToken?: number;
 }>();
 
@@ -15,7 +15,7 @@ const failed = ref(false);
 const remountKey = ref(0);
 
 const resolved = computed(() => resolveStrokeAssets(props.entryId, props.script));
-/** Stable URLs — do not append cache-bust query params (defeats SW / HTTP cache). */
+/** 稳定 URL，不追加缓存破坏参数（以免打穿 SW / HTTP 缓存） */
 const gifUrls = computed(() => resolved.value.urls);
 
 watch(
@@ -27,6 +27,11 @@ watch(
   { immediate: true },
 );
 
+/**
+ * 图片加载失败时退回静态字形。
+ * @returns 无
+ * @副作用 将 `failed` 置为 true
+ */
 function onImgError() {
   failed.value = true;
 }
@@ -35,10 +40,7 @@ function onImgError() {
 <template>
   <div
     class="stroke"
-    :class="[
-      `stroke--${script}`,
-      { 'stroke--split': !failed && gifUrls.length > 1 },
-    ]"
+    :class="[`stroke--${script}`, { 'stroke--split': !failed && gifUrls.length > 1 }]"
   >
     <template v-if="!failed && gifUrls.length">
       <img

@@ -5,13 +5,11 @@ import ProgressPanel from "@/components/ProgressPanel.vue";
 import SettingsPanel from "@/components/SettingsPanel.vue";
 import StrokeOrder from "@/components/StrokeOrder.vue";
 import { usePractice } from "@/composables/usePractice";
+import { 笔顺预热, 自评后自动下一题毫秒 } from "@/constants/product";
 import type { ScriptKind } from "@/data/gojuuon";
-import {
-  allSeionStrokeUrls,
-  prefetchStrokeUrls,
-  strokeUrlsForRound,
-} from "@/data/strokeAssets";
+import { allSeionStrokeUrls, prefetchStrokeUrls, strokeUrlsForRound } from "@/data/strokeAssets";
 
+/** 界面阶段：书写 / 对照自评 */
 type Phase = "draw" | "review";
 
 const {
@@ -45,10 +43,22 @@ const dual = computed(() => activeScripts.value.length > 1);
 
 let advanceTimer: ReturnType<typeof setTimeout> | null = null;
 
+/**
+ * 保存某一字体画板组件实例的模板引用。
+ * @param script - 字体
+ * @param el - Vue 组件实例或 null
+ * @returns 无
+ * @副作用 写入 `boardRefs`
+ */
 function setBoardRef(script: ScriptKind, el: unknown) {
   boardRefs.value[script] = (el as InstanceType<typeof DrawingBoard> | null) ?? null;
 }
 
+/**
+ * 取消「自评完成后自动下一题」定时器。
+ * @returns 无
+ * @副作用 清除 timeout
+ */
 function clearAdvanceTimer() {
   if (advanceTimer !== null) {
     clearTimeout(advanceTimer);
@@ -56,6 +66,11 @@ function clearAdvanceTimer() {
   }
 }
 
+/**
+ * 重置本轮 UI：回到书写阶段、清空快照与评分、强制清空画板。
+ * @returns 无
+ * @副作用 改 phase / snapshots / graded / clearToken；清定时器
+ */
 function resetRoundUi() {
   clearAdvanceTimer();
   phase.value = "draw";
@@ -87,12 +102,17 @@ watch(
 onMounted(() => {
   const warm = () => prefetchStrokeUrls(allSeionStrokeUrls());
   if (typeof requestIdleCallback === "function") {
-    requestIdleCallback(warm, { timeout: 4000 });
+    requestIdleCallback(warm, { timeout: 笔顺预热.空闲超时毫秒 });
   } else {
-    window.setTimeout(warm, 1200);
+    window.setTimeout(warm, 笔顺预热.降级延迟毫秒);
   }
 });
 
+/**
+ * 提交书写：截图并进入对照自评阶段。
+ * @returns 无
+ * @副作用 写 snapshots / graded / phase；递增笔顺播放令牌
+ */
 function submit() {
   clearAdvanceTimer();
   for (const script of activeScripts.value) {
@@ -103,16 +123,34 @@ function submit() {
   phase.value = "review";
 }
 
+/**
+ * 某字体是否已完成自评。
+ * @param script - 字体
+ * @returns 是否已评
+ * @副作用 无
+ */
 function isGraded(script: ScriptKind) {
   return graded[script] === true || graded[script] === false;
 }
 
+/**
+ * 进入队列中的下一题并重置本轮 UI。
+ * @returns Promise，在 DOM 更新后完成
+ * @副作用 调用练习引擎 `nextRound` 并重置界面
+ */
 async function goNext() {
   nextRound();
   await nextTick();
   resetRoundUi();
 }
 
+/**
+ * 处理自评按钮：记分；全部评完后短暂延迟自动下一题。
+ * @param script - 被评字体
+ * @param correct - 是否正确
+ * @returns 无
+ * @副作用 写 graded、调用 gradeScript、可能启动定时器
+ */
 function onGrade(script: ScriptKind, correct: boolean) {
   if (isGraded(script)) return;
   graded[script] = correct;
@@ -125,12 +163,12 @@ function onGrade(script: ScriptKind, correct: boolean) {
   advanceTimer = setTimeout(() => {
     advanceTimer = null;
     void goNext();
-  }, 320);
+  }, 自评后自动下一题毫秒);
 }
 
 onUnmounted(clearAdvanceTimer);
 
-/** Single-script rounds tint the prompt; dual keeps a neutral both state. */
+/** 单字体时提示区着色；双字体保持中性 both */
 const promptScript = computed(() => {
   const scripts = activeScripts.value;
   if (scripts.length === 1) return scripts[0]!;
@@ -138,6 +176,7 @@ const promptScript = computed(() => {
   return null;
 });
 
+/** 提示区大标题文案（平假名 / 片假名 / 平·片） */
 const promptScriptTitle = computed(() => {
   const script = promptScript.value;
   if (script === "hiragana" || script === "katakana") return scriptLabel(script);

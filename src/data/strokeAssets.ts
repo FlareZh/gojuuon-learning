@@ -1,12 +1,9 @@
+import { 笔顺资源目录 } from "@/constants/product";
 import type { ScriptKind } from "./gojuuon";
 
 /**
- * Stroke GIFs vendored from 小楠日语 official pack
- * https://riyutool.com/50yintu-bishun/
- * (CDN: jp-thumb.riyutool.com/50yintu-bishun/; zip download offered on page)
- *
- * Pack covers 清音 only (46 hiragana + 46 katakana). Dakuten / handakuten /
- * youon map to their base stroke GIFs.
+ * 笔顺 GIF：来自小楠日语官方打包（https://riyutool.com/50yintu-bishun/）。
+ * 源站仅有清音；浊音 / 半浊音 / 拗音映射到基础清音动图。
  */
 
 /** Source pack uses `hu` for ふ; we rename to `fu` when vendoring. */
@@ -140,16 +137,36 @@ export interface StrokeResolve {
   note: string | null;
 }
 
+/**
+ * 为相对路径加上 Vite `BASE_URL`（适配 GitHub Pages 子路径）。
+ * @param path - 不以或已以 `/` 开头均可
+ * @returns 绝对站点路径
+ * @副作用 无
+ */
 function withBase(path: string): string {
   const base = import.meta.env.BASE_URL;
   const normalized = path.replace(/^\//, "");
   return `${base}${normalized}`;
 }
 
+/**
+ * 拼装单个清音笔顺 GIF 路径。
+ * @param script - 字体
+ * @param id - 清音罗马音 id（仓库内 `fu` 对应源站 `hu`）
+ * @returns 可给 `<img src>` 使用的 URL
+ * @副作用 无
+ */
 function gifPath(script: ScriptKind, id: SeionId): string {
-  return withBase(`strokes/${script}/${id}.gif`);
+  return withBase(`${笔顺资源目录}/${script}/${id}.gif`);
 }
 
+/**
+ * 按假名 id 与字体解析应播放的笔顺资源。
+ * @param entryId - 五十音条目 id
+ * @param script - 平 / 片
+ * @returns URL 列表、映射类型与可选说明文案
+ * @副作用 无
+ */
 export function resolveStrokeAssets(entryId: string, script: ScriptKind): StrokeResolve {
   if (SEION_SET.has(entryId)) {
     const id = entryId as SeionId;
@@ -191,20 +208,32 @@ export function resolveStrokeAssets(entryId: string, script: ScriptKind): Stroke
     };
   }
 
-  // Fallback: try entry id as filename
+  // 回退：按条目 id 当作文件名尝试
   return {
-    urls: [withBase(`strokes/${script}/${entryId}.gif`)],
+    urls: [withBase(`${笔顺资源目录}/${script}/${entryId}.gif`)],
     kind: "exact",
     assetIds: [entryId],
     note: null,
   };
 }
 
+/**
+ * 判断 id 是否为有独立 GIF 的清音。
+ * @param id - 假名 id
+ * @returns 是否清音资源 id
+ * @副作用 无
+ */
 export function isSeionStrokeId(id: string): boolean {
   return SEION_SET.has(id);
 }
 
-/** Unique stroke GIF URLs for a practice round (both scripts if dual). */
+/**
+ * 汇总一轮练习所需的去重笔顺 URL（双字体时合并）。
+ * @param entryId - 假名 id
+ * @param scripts - 本轮字体列表
+ * @returns 去重后的 GIF URL
+ * @副作用 无
+ */
 export function strokeUrlsForRound(entryId: string, scripts: ScriptKind[]): string[] {
   const seen = new Set<string>();
   const urls: string[] = [];
@@ -219,18 +248,24 @@ export function strokeUrlsForRound(entryId: string, scripts: ScriptKind[]): stri
 }
 
 /**
- * Warm HTTP + SW caches for stroke GIFs while the user is still drawing.
- * Idempotent; safe to call on every card change.
+ * 预取笔顺 GIF，暖热 HTTP / Service Worker 缓存（书写阶段即可调用）。
+ * @param urls - 待预取 URL 列表
+ * @returns 无
+ * @副作用 发起 `fetch`；失败静默忽略
  */
 export function prefetchStrokeUrls(urls: string[]): void {
   for (const url of urls) {
     void fetch(url, { credentials: "same-origin", mode: "same-origin" }).catch(() => {
-      /* ignore; img will retry on review */
+      /* 忽略；对照阶段 img 会再试 */
     });
   }
 }
 
-/** All vendored 清音 GIF paths (~820KB total) — for idle warm-up. */
+/**
+ * 列出仓库内全部清音笔顺 GIF 路径（约 820KB），供空闲预热。
+ * @returns 平假名 + 片假名全部清音 URL
+ * @副作用 无
+ */
 export function allSeionStrokeUrls(): string[] {
   const scripts: ScriptKind[] = ["hiragana", "katakana"];
   const urls: string[] = [];

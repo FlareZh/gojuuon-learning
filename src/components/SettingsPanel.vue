@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import type { KanaGroup } from "@/data/gojuuon";
+import { 假名分组标签, 全部假名分组, 每日新卡 } from "@/constants/product";
 import type { OrderMode, PracticeSettings, ScriptMode } from "@/composables/usePractice";
+import type { KanaGroup } from "@/data/gojuuon";
 
 const props = defineProps<{
   open: boolean;
@@ -17,28 +18,48 @@ const emit = defineEmits<{
   restart: [];
 }>();
 
-const groupLabels: Record<KanaGroup, string> = {
-  seion: "清音",
-  dakuon: "浊音",
-  handakuon: "半浊音",
-  youon: "拗音",
-};
+const groupLabels = 假名分组标签;
+const allGroups = [...全部假名分组] as KanaGroup[];
 
-const allGroups: KanaGroup[] = ["seion", "dakuon", "handakuon", "youon"];
-
+/**
+ * 切换假名种类（平 / 片 / 两者）。
+ * @param mode - 目标模式
+ * @returns 无
+ * @副作用 向父组件 emit `update`
+ */
 function setScriptMode(mode: ScriptMode) {
   emit("update", { scriptMode: mode });
 }
 
+/**
+ * 切换出题顺序（五十音序 / 随机）。
+ * @param mode - 目标顺序
+ * @returns 无
+ * @副作用 emit `update`
+ */
 function setOrderMode(mode: OrderMode) {
   emit("update", { orderMode: mode });
 }
 
+/**
+ * 设置每日新卡上限（钳制到产品允许范围）。
+ * @param value - 用户输入的数字
+ * @returns 无
+ * @副作用 emit `update`
+ */
 function setNewCardsPerDay(value: number) {
-  const n = Number.isFinite(value) ? Math.min(40, Math.max(1, Math.round(value))) : 10;
+  const n = Number.isFinite(value)
+    ? Math.min(每日新卡.最大, Math.max(每日新卡.最小, Math.round(value)))
+    : 每日新卡.默认;
   emit("update", { newCardsPerDay: n });
 }
 
+/**
+ * 勾选 / 取消勾选假名分组；至少保留一组。
+ * @param group - 清音 / 浊音 / 半浊音 / 拗音
+ * @returns 无
+ * @副作用 emit `update`
+ */
 function toggleGroup(group: KanaGroup) {
   const current = props.settings.enabledGroups;
   const has = current.includes(group);
@@ -147,8 +168,8 @@ function toggleGroup(group: KanaGroup) {
           <span>每天最多新学</span>
           <input
             type="number"
-            min="1"
-            max="40"
+            :min="每日新卡.最小"
+            :max="每日新卡.最大"
             inputmode="numeric"
             :value="settings.newCardsPerDay"
             @change="setNewCardsPerDay(Number(($event.target as HTMLInputElement).value))"

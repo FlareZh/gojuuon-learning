@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
+import { 画板 } from "@/constants/product";
 import type { ScriptKind } from "@/data/gojuuon";
 
 const props = withDefaults(
@@ -18,8 +19,9 @@ const props = withDefaults(
   },
 );
 
+/** 按字体区分的田字格辅助线颜色 */
 const guideStroke = computed(() =>
-  props.script === "katakana" ? "rgba(40, 96, 120, 0.22)" : "rgba(140, 96, 48, 0.22)",
+  props.script === "katakana" ? 画板.片假名辅助线 : 画板.平假名辅助线,
 );
 
 const frameRef = ref<HTMLElement | null>(null);
@@ -28,45 +30,52 @@ const drawing = ref(false);
 
 let ctx: CanvasRenderingContext2D | null = null;
 let resizeObserver: ResizeObserver | null = null;
-/** CSS-pixel size last applied to the bitmap (guides / stroke coords). */
+/** 最近一次应用到位图的 CSS 像素宽高（坐标与辅助线共用） */
 let cssW = 0;
 let cssH = 0;
-/** Canvas bitmaps after each completed stroke (empty = guides only). */
+/** 每完成一笔后的位图快照（空表示仅有辅助线） */
 let strokeHistory: ImageData[] = [];
 const activePointers = new Set<number>();
-/** True after a two-finger undo until all pointers lift. */
+/** 双指撤销手势进行中，直到全部触点抬起 */
 let undoGestureActive = false;
-/** Current stroke produced visible ink (ignore empty taps). */
+/** 当前笔画是否已画出可见墨迹（忽略空点按） */
 let strokeDirty = false;
 
+/**
+ * 应用笔迹样式（线宽、颜色、圆角、设备像素比变换）。
+ * @returns 无
+ * @副作用 修改 canvas 2D 上下文状态
+ */
 function applyStrokeStyle() {
   if (!ctx) return;
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const dpr = Math.min(window.devicePixelRatio || 1, 画板.最大设备像素比);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.lineWidth = props.compact ? 3.2 : 4;
-  ctx.strokeStyle = "#1a2332";
+  ctx.lineWidth = props.compact ? 画板.线宽紧凑 : 画板.线宽普通;
+  ctx.strokeStyle = 画板.笔迹颜色;
   ctx.setLineDash([]);
 }
 
+/**
+ * 按外框尺寸重设 canvas 位图；书写中途不重置以免丢笔迹。
+ * @returns 无
+ * @副作用 可能清空历史并重绘辅助线
+ */
 function sizeCanvas() {
   const frame = frameRef.value;
   const canvas = canvasRef.value;
   if (!frame || !canvas) return;
-  // Don't reset the bitmap while the user is mid-stroke.
   if (drawing.value) return;
 
-  // Use the square frame's content box — stable, excludes borders on the frame.
   const w = Math.round(frame.clientWidth);
   const h = Math.round(frame.clientHeight);
-  if (w < 2 || h < 2) return;
+  if (w < 画板.最小有效边长 || h < 画板.最小有效边长) return;
 
-  const dpr = Math.min(window.devicePixelRatio || 1, 3);
+  const dpr = Math.min(window.devicePixelRatio || 1, 画板.最大设备像素比);
   const nextBw = Math.round(w * dpr);
   const nextBh = Math.round(h * dpr);
 
-  // Skip no-op resizes so we don't wipe strokes on minor subpixel noise.
   if (canvas.width === nextBw && canvas.height === nextBh && cssW === w && cssH === h && ctx) {
     return;
   }
@@ -82,26 +91,37 @@ function sizeCanvas() {
   drawGuides();
 }
 
+/**
+ * 清空画布并绘制田字格辅助线。
+ * @returns 无
+ * @副作用 重绘 canvas
+ */
 function drawGuides() {
-  if (!ctx || cssW < 2 || cssH < 2) return;
+  if (!ctx || cssW < 画板.最小有效边长 || cssH < 画板.最小有效边长) return;
   const w = cssW;
   const h = cssH;
   applyStrokeStyle();
   ctx.clearRect(0, 0, w, h);
   ctx.save();
   ctx.strokeStyle = guideStroke.value;
-  ctx.lineWidth = 1;
-  ctx.setLineDash([6, 6]);
+  ctx.lineWidth = 画板.辅助线线宽;
+  ctx.setLineDash([...画板.辅助线虚线]);
   ctx.beginPath();
-  ctx.moveTo(w / 2, 12);
-  ctx.lineTo(w / 2, h - 12);
-  ctx.moveTo(12, h / 2);
-  ctx.lineTo(w - 12, h / 2);
+  const m = 画板.辅助线边距;
+  ctx.moveTo(w / 2, m);
+  ctx.lineTo(w / 2, h - m);
+  ctx.moveTo(m, h / 2);
+  ctx.lineTo(w - m, h / 2);
   ctx.stroke();
   ctx.restore();
   applyStrokeStyle();
 }
 
+/**
+ * 截取当前完整位图。
+ * @returns ImageData；失败返回 null
+ * @副作用 无
+ */
 function captureState(): ImageData | null {
   const canvas = canvasRef.value;
   if (!canvas || !ctx) return null;
@@ -112,6 +132,12 @@ function captureState(): ImageData | null {
   }
 }
 
+/**
+ * 恢复到位图快照；null 则只画辅助线。
+ * @param data - 历史快照
+ * @returns 无
+ * @副作用 重写 canvas 像素
+ */
 function restoreState(data: ImageData | null) {
   const canvas = canvasRef.value;
   if (!canvas || !ctx) return;
@@ -124,11 +150,21 @@ function restoreState(data: ImageData | null) {
   applyStrokeStyle();
 }
 
+/**
+ * 将当前画面压入笔画历史栈。
+ * @returns 无
+ * @副作用 向 `strokeHistory` 追加快照
+ */
 function pushStrokeHistory() {
   const snap = captureState();
   if (snap) strokeHistory.push(snap);
 }
 
+/**
+ * 撤销上一完整笔画。
+ * @returns 无
+ * @副作用 弹出历史并重绘
+ */
 function undoLastStroke() {
   if (strokeHistory.length === 0) {
     drawGuides();
@@ -138,22 +174,34 @@ function undoLastStroke() {
   restoreState(strokeHistory[strokeHistory.length - 1] ?? null);
 }
 
+/**
+ * 释放单个指针捕获。
+ * @param pointerId - 指针 id
+ * @returns 无
+ * @副作用 调用 `releasePointerCapture`
+ */
 function releasePointer(pointerId: number) {
   const canvas = canvasRef.value;
   try {
     canvas?.releasePointerCapture(pointerId);
   } catch {
-    // ignore — capture may already be gone
+    // 捕获可能已解除
   }
 }
 
+/**
+ * 释放当前全部活动指针。
+ * @returns 无
+ * @副作用 释放捕获
+ */
 function releaseAllPointers() {
   for (const id of [...activePointers]) releasePointer(id);
 }
 
 /**
- * Two-finger undo. First finger often already started an empty "draw";
- * abort that, then always remove the last completed stroke once per gesture.
+ * 双指撤销：取消进行中的笔画，并在适当时撤销上一笔。
+ * @returns 无
+ * @副作用 改历史、指针集、drawing 状态
  */
 function performTwoFingerUndo() {
   if (props.readonly || undoGestureActive) return;
@@ -168,23 +216,32 @@ function performTwoFingerUndo() {
   undoGestureActive = true;
   releaseAllPointers();
 
-  // Mid-stroke with ink: cancelling that stroke is enough.
-  // Idle / empty first-finger tap: undo the previous completed stroke.
   if (!hadInkInProgress) {
     undoLastStroke();
   }
 }
 
+/**
+ * 将指针事件坐标映射到 CSS 像素画布空间。
+ * @param event - 指针事件
+ * @returns `{ x, y }`
+ * @副作用 无
+ */
 function pointerPos(event: PointerEvent) {
   const canvas = canvasRef.value;
   if (!canvas || cssW < 1) return { x: 0, y: 0 };
   const rect = canvas.getBoundingClientRect();
-  // Map into the CSS-pixel space we used for the bitmap (handles any subpixel stretch).
   const x = ((event.clientX - rect.left) / rect.width) * cssW;
   const y = ((event.clientY - rect.top) / rect.height) * cssH;
   return { x, y };
 }
 
+/**
+ * 指针按下：开始笔画或触发双指撤销。
+ * @param event - 指针事件
+ * @returns 无
+ * @副作用 捕获指针、改 drawing 状态
+ */
 function onPointerDown(event: PointerEvent) {
   if (props.readonly) return;
   const canvas = canvasRef.value;
@@ -208,6 +265,12 @@ function onPointerDown(event: PointerEvent) {
   ctx.moveTo(x, y);
 }
 
+/**
+ * 指针移动：续画当前笔画。
+ * @param event - 指针事件
+ * @returns 无
+ * @副作用 在 canvas 上描线
+ */
 function onPointerMove(event: PointerEvent) {
   if (props.readonly || !drawing.value || !ctx || undoGestureActive) return;
   if (!activePointers.has(event.pointerId)) return;
@@ -217,6 +280,12 @@ function onPointerMove(event: PointerEvent) {
   ctx.stroke();
 }
 
+/**
+ * 指针抬起 / 取消：结束笔画并可能入历史栈。
+ * @param event - 指针事件
+ * @returns 无
+ * @副作用 更新指针集与历史
+ */
 function onPointerUp(event: PointerEvent) {
   activePointers.delete(event.pointerId);
   releasePointer(event.pointerId);
@@ -235,7 +304,12 @@ function onPointerUp(event: PointerEvent) {
   }
 }
 
-/** iOS/Safari: pointer events for the 2nd finger are unreliable; touchstart is not. */
+/**
+ * 触摸开始：Safari 上第二指更可靠，用于双指撤销。
+ * @param event - 触摸事件
+ * @returns 无
+ * @副作用 可能阻止默认缩放并撤销
+ */
 function onTouchStart(event: TouchEvent) {
   if (props.readonly) return;
   if (event.touches.length < 2) return;
@@ -243,6 +317,11 @@ function onTouchStart(event: TouchEvent) {
   performTwoFingerUndo();
 }
 
+/**
+ * 清空画板与笔画历史。
+ * @returns 无
+ * @副作用 重置状态并重绘辅助线
+ */
 function clear() {
   strokeHistory = [];
   drawing.value = false;
@@ -252,10 +331,15 @@ function clear() {
   drawGuides();
 }
 
+/**
+ * 导出当前画面为 data URL 快照。
+ * @returns PNG data URL；无 canvas 时为空串
+ * @副作用 无
+ */
 function getSnapshot(): string {
   const canvas = canvasRef.value;
   if (!canvas) return "";
-  return canvas.toDataURL("image/png");
+  return canvas.toDataURL(画板.快照格式);
 }
 
 watch(
@@ -273,7 +357,6 @@ watch(
 onMounted(async () => {
   await nextTick();
   sizeCanvas();
-  // Second pass after fonts / address-bar / dvh settle on mobile.
   requestAnimationFrame(() => sizeCanvas());
 
   const frame = frameRef.value;
@@ -282,7 +365,6 @@ onMounted(async () => {
     resizeObserver = new ResizeObserver(() => sizeCanvas());
     resizeObserver.observe(frame);
   }
-  // passive: false so we can prevent pinch-zoom and handle two-finger undo.
   canvas?.addEventListener("touchstart", onTouchStart, { passive: false });
   window.addEventListener("resize", sizeCanvas);
   window.visualViewport?.addEventListener("resize", sizeCanvas);
@@ -302,10 +384,7 @@ defineExpose({ clear, getSnapshot });
 <template>
   <div
     class="board"
-    :class="[
-      `board--${script}`,
-      { 'board--compact': compact, 'board--readonly': readonly },
-    ]"
+    :class="[`board--${script}`, { 'board--compact': compact, 'board--readonly': readonly }]"
   >
     <p v-if="label" class="board__label">{{ label }}</p>
     <div ref="frameRef" class="board__frame">

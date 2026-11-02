@@ -8,7 +8,7 @@ export interface KanaEntry {
   hiragana: string;
   katakana: string;
   group: KanaGroup;
-  /** Gojuuon row order within the full table */
+  /** 在整表中的五十音序下标 */
   order: number;
 }
 

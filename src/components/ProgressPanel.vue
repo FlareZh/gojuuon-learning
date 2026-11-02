@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { 进度色调 } from "@/constants/product";
+import { PROGRESS_TONE } from "@/constants/product";
 import type { ProgressRow } from "@/composables/usePractice";
 import type { ScriptKind } from "@/data/gojuuon";
 import { GOJUUON_CHART } from "@/data/gojuuonChart";
@@ -45,8 +45,8 @@ const summary = computed(() => {
   const rows = props.rows.filter((row) => row.script === tab.value);
   const practiced = rows.filter((row) => row.stats.correct > 0 || row.stats.wrong > 0);
   const mature = rows.filter((row) => row.mastered);
-  const learning = rows.filter((row) => row.tone === 进度色调.学习中);
-  const review = rows.filter((row) => row.tone === 进度色调.复习中);
+  const learning = rows.filter((row) => row.tone === PROGRESS_TONE.learning);
+  const review = rows.filter((row) => row.tone === PROGRESS_TONE.review);
   return {
     total: rows.length,
     practiced: practiced.length,
@@ -69,7 +69,7 @@ const selected = computed(() => {
  * @副作用 无
  */
 function cellTone(row: ProgressRow | undefined): string {
-  return row?.tone ?? 进度色调.未练;
+  return row?.tone ?? PROGRESS_TONE.idle;
 }
 
 /**

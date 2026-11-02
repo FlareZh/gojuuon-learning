@@ -1,13 +1,13 @@
 import { computed, ref, watch } from "vue";
 import {
-  Srs阶段,
-  存储键,
-  取题循环保护次数,
-  每日新卡,
-  答错再入队间隔张数,
-  旧版存储键,
-  本地存储前缀,
-  默认练习设置,
+  DEFAULT_PRACTICE_SETTINGS,
+  LEGACY_STORAGE_KEYS,
+  NEW_CARDS_PER_DAY,
+  STORAGE_KEYS,
+  STORAGE_PREFIX,
+  SrsStageLevel,
+  TAKE_ROUND_GUARD_LIMIT,
+  WRONG_REQUEUE_GAP,
 } from "@/constants/product";
 import {
   GOJUUON,
@@ -61,7 +61,7 @@ export interface ProgressRow {
   group: KanaGroup;
   order: number;
   stats: ItemStats;
-  /** stage === 成熟；到期仍会复习 */
+  /** stage 已达成熟；到期仍会复习 */
   mastered: boolean;
   tone: string;
   stageLabel: string;
@@ -80,10 +80,10 @@ export interface SessionSnapshot {
 }
 
 const DEFAULT_SETTINGS: PracticeSettings = {
-  scriptMode: 默认练习设置.scriptMode,
-  orderMode: 默认练习设置.orderMode,
-  newCardsPerDay: 默认练习设置.newCardsPerDay,
-  enabledGroups: [...默认练习设置.enabledGroups],
+  scriptMode: DEFAULT_PRACTICE_SETTINGS.scriptMode,
+  orderMode: DEFAULT_PRACTICE_SETTINGS.orderMode,
+  newCardsPerDay: DEFAULT_PRACTICE_SETTINGS.newCardsPerDay,
+  enabledGroups: [...DEFAULT_PRACTICE_SETTINGS.enabledGroups],
 };
 
 const EMPTY_SESSION: SessionSnapshot = {
@@ -157,7 +157,10 @@ function mergeSettings(value: PracticeSettings & { hideAfterCorrect?: number }):
   return {
     scriptMode: value.scriptMode ?? DEFAULT_SETTINGS.scriptMode,
     orderMode: value.orderMode ?? DEFAULT_SETTINGS.orderMode,
-    newCardsPerDay: Math.min(每日新卡.最大, Math.max(每日新卡.最小, Math.round(rawNew))),
+    newCardsPerDay: Math.min(
+      NEW_CARDS_PER_DAY.max,
+      Math.max(NEW_CARDS_PER_DAY.min, Math.round(rawNew)),
+    ),
     enabledGroups: groups,
   };
 }
@@ -206,11 +209,11 @@ function compareCardKeys(a: string, b: string, entryById: Map<string, KanaEntry>
  * @副作用 读写 localStorage（经 useStorage）；迁移旧统计键
  */
 export function usePractice() {
-  const settings = useStorage<PracticeSettings>(存储键.设置, { ...DEFAULT_SETTINGS });
-  const stats = useStorage<Record<string, ItemStats>>(存储键.统计, {});
-  const currentEntryId = useStorage<string | null>(存储键.当前假名Id, null);
-  const currentScripts = useStorage<ScriptKind[]>(存储键.当前字体列表, []);
-  const session = useStorage<SessionSnapshot>(存储键.会话, { ...EMPTY_SESSION });
+  const settings = useStorage<PracticeSettings>(STORAGE_KEYS.settings, { ...DEFAULT_SETTINGS });
+  const stats = useStorage<Record<string, ItemStats>>(STORAGE_KEYS.stats, {});
+  const currentEntryId = useStorage<string | null>(STORAGE_KEYS.currentEntryId, null);
+  const currentScripts = useStorage<ScriptKind[]>(STORAGE_KEYS.currentScripts, []);
+  const session = useStorage<SessionSnapshot>(STORAGE_KEYS.session, { ...EMPTY_SESSION });
 
   settings.value = mergeSettings(
     settings.value as PracticeSettings & { hideAfterCorrect?: number },
@@ -235,7 +238,7 @@ export function usePractice() {
   /**
    * 读取某卡片统计，缺省返回空统计。
    * @param key - 卡片键
-   * @returns 统计对象（可能是空模板副本语义上的默认）
+   * @returns 统计对象
    * @副作用 无
    */
   function getStats(key: string): ItemStats {
@@ -403,7 +406,7 @@ export function usePractice() {
     const modeScripts = scriptsForMode(settings.value.scriptMode);
     const rotated = new Set<string>();
     let guard = 0;
-    while (guard++ < 取题循环保护次数) {
+    while (guard++ < TAKE_ROUND_GUARD_LIMIT) {
       if (session.value.queue.length === 0) {
         refillQueueIfNeeded(now);
         if (session.value.queue.length === 0) {
@@ -559,7 +562,7 @@ export function usePractice() {
         queue: q,
         buryUntil: {
           ...(session.value.buryUntil ?? {}),
-          [key]: reviewedCount + 答错再入队间隔张数,
+          [key]: reviewedCount + WRONG_REQUEUE_GAP,
         },
       };
     } else {
@@ -588,9 +591,9 @@ export function usePractice() {
     currentScripts.value = [];
     session.value = { ...EMPTY_SESSION, date: localDateKey() };
     try {
-      localStorage.removeItem(`${本地存储前缀}${旧版存储键.连对}`);
-      localStorage.removeItem(`${本地存储前缀}${旧版存储键.随机队列}`);
-      localStorage.removeItem(`${本地存储前缀}${旧版存储键.顺序下标}`);
+      localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.streaks}`);
+      localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.randomQueue}`);
+      localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.sequentialIndex}`);
     } catch {
       // ignore
     }
@@ -665,7 +668,7 @@ export function usePractice() {
           group: entry.group,
           order: entry.order,
           stats: s,
-          mastered: s.stage >= Srs阶段.成熟,
+          mastered: s.stage >= SrsStageLevel.MATURE,
           tone: progressTone(s),
           stageLabel: stageLabel(s.stage),
           dueLabel: formatDue(s.dueAt, now),

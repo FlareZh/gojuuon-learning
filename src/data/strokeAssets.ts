@@ -1,4 +1,4 @@
-import { 笔顺资源目录 } from "@/constants/product";
+import { STROKE_ASSET_DIR } from "@/constants/product";
 import type { ScriptKind } from "./gojuuon";
 
 /**
@@ -157,7 +157,7 @@ function withBase(path: string): string {
  * @副作用 无
  */
 function gifPath(script: ScriptKind, id: SeionId): string {
-  return withBase(`${笔顺资源目录}/${script}/${id}.gif`);
+  return withBase(`${STROKE_ASSET_DIR}/${script}/${id}.gif`);
 }
 
 /**
@@ -210,7 +210,7 @@ export function resolveStrokeAssets(entryId: string, script: ScriptKind): Stroke
 
   // 回退：按条目 id 当作文件名尝试
   return {
-    urls: [withBase(`${笔顺资源目录}/${script}/${entryId}.gif`)],
+    urls: [withBase(`${STROKE_ASSET_DIR}/${script}/${entryId}.gif`)],
     kind: "exact",
     assetIds: [entryId],
     note: null,

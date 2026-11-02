@@ -5,7 +5,7 @@ import ProgressPanel from "@/components/ProgressPanel.vue";
 import SettingsPanel from "@/components/SettingsPanel.vue";
 import StrokeOrder from "@/components/StrokeOrder.vue";
 import { usePractice } from "@/composables/usePractice";
-import { 笔顺预热, 自评后自动下一题毫秒 } from "@/constants/product";
+import { AUTO_ADVANCE_AFTER_GRADE_MS, STROKE_PREFETCH } from "@/constants/product";
 import type { ScriptKind } from "@/data/gojuuon";
 import { allSeionStrokeUrls, prefetchStrokeUrls, strokeUrlsForRound } from "@/data/strokeAssets";
 
@@ -102,9 +102,9 @@ watch(
 onMounted(() => {
   const warm = () => prefetchStrokeUrls(allSeionStrokeUrls());
   if (typeof requestIdleCallback === "function") {
-    requestIdleCallback(warm, { timeout: 笔顺预热.空闲超时毫秒 });
+    requestIdleCallback(warm, { timeout: STROKE_PREFETCH.idleTimeoutMs });
   } else {
-    window.setTimeout(warm, 笔顺预热.降级延迟毫秒);
+    window.setTimeout(warm, STROKE_PREFETCH.fallbackDelayMs);
   }
 });
 
@@ -163,7 +163,7 @@ function onGrade(script: ScriptKind, correct: boolean) {
   advanceTimer = setTimeout(() => {
     advanceTimer = null;
     void goNext();
-  }, 自评后自动下一题毫秒);
+  }, AUTO_ADVANCE_AFTER_GRADE_MS);
 }
 
 onUnmounted(clearAdvanceTimer);

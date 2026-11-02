@@ -1,16 +1,16 @@
 import { ref, watch, type Ref } from "vue";
-import { 本地存储前缀 } from "@/constants/product";
+import { STORAGE_PREFIX } from "@/constants/product";
 
 /**
  * 将状态与 localStorage 双向同步的响应式引用。
  * @typeParam T - 可 JSON 序列化的状态类型
- * @param key - 逻辑键名（会自动加 {@link 本地存储前缀}）
+ * @param key - 逻辑键名（会自动加 {@link STORAGE_PREFIX}）
  * @param defaultValue - 无缓存或解析失败时的默认值
  * @returns 可读写的 Vue `Ref`；深度变更会写回 localStorage
  * @副作用 读取并持续写入 localStorage；配额/隐私模式失败时静默忽略
  */
 export function useStorage<T>(key: string, defaultValue: T): Ref<T> {
-  const storageKey = `${本地存储前缀}${key}`;
+  const storageKey = `${STORAGE_PREFIX}${key}`;
   const state = ref(readValue(storageKey, defaultValue)) as Ref<T>;
 
   watch(
@@ -54,7 +54,7 @@ function readValue<T>(storageKey: string, defaultValue: T): T {
  */
 export function clearStorageKey(key: string): void {
   try {
-    localStorage.removeItem(`${本地存储前缀}${key}`);
+    localStorage.removeItem(`${STORAGE_PREFIX}${key}`);
   } catch {
     // ignore
   }

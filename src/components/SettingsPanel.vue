@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { 假名分组标签, 全部假名分组, 每日新卡 } from "@/constants/product";
+import { ALL_KANA_GROUPS, KANA_GROUP_LABELS, NEW_CARDS_PER_DAY } from "@/constants/product";
 import type { OrderMode, PracticeSettings, ScriptMode } from "@/composables/usePractice";
 import type { KanaGroup } from "@/data/gojuuon";
 
@@ -18,8 +18,8 @@ const emit = defineEmits<{
   restart: [];
 }>();
 
-const groupLabels = 假名分组标签;
-const allGroups = [...全部假名分组] as KanaGroup[];
+const groupLabels = KANA_GROUP_LABELS;
+const allGroups = [...ALL_KANA_GROUPS] as KanaGroup[];
 
 /**
  * 切换假名种类（平 / 片 / 两者）。
@@ -49,8 +49,8 @@ function setOrderMode(mode: OrderMode) {
  */
 function setNewCardsPerDay(value: number) {
   const n = Number.isFinite(value)
-    ? Math.min(每日新卡.最大, Math.max(每日新卡.最小, Math.round(value)))
-    : 每日新卡.默认;
+    ? Math.min(NEW_CARDS_PER_DAY.max, Math.max(NEW_CARDS_PER_DAY.min, Math.round(value)))
+    : NEW_CARDS_PER_DAY.default;
   emit("update", { newCardsPerDay: n });
 }
 
@@ -168,8 +168,8 @@ function toggleGroup(group: KanaGroup) {
           <span>每天最多新学</span>
           <input
             type="number"
-            :min="每日新卡.最小"
-            :max="每日新卡.最大"
+            :min="NEW_CARDS_PER_DAY.min"
+            :max="NEW_CARDS_PER_DAY.max"
             inputmode="numeric"
             :value="settings.newCardsPerDay"
             @change="setNewCardsPerDay(Number(($event.target as HTMLInputElement).value))"

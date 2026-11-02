@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
-import { 画板 } from "@/constants/product";
+import { CANVAS } from "@/constants/product";
 import type { ScriptKind } from "@/data/gojuuon";
 
 const props = withDefaults(
@@ -21,7 +21,7 @@ const props = withDefaults(
 
 /** 按字体区分的田字格辅助线颜色 */
 const guideStroke = computed(() =>
-  props.script === "katakana" ? 画板.片假名辅助线 : 画板.平假名辅助线,
+  props.script === "katakana" ? CANVAS.katakanaGuide : CANVAS.hiraganaGuide,
 );
 
 const frameRef = ref<HTMLElement | null>(null);
@@ -48,12 +48,12 @@ let strokeDirty = false;
  */
 function applyStrokeStyle() {
   if (!ctx) return;
-  const dpr = Math.min(window.devicePixelRatio || 1, 画板.最大设备像素比);
+  const dpr = Math.min(window.devicePixelRatio || 1, CANVAS.maxDevicePixelRatio);
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.lineCap = "round";
   ctx.lineJoin = "round";
-  ctx.lineWidth = props.compact ? 画板.线宽紧凑 : 画板.线宽普通;
-  ctx.strokeStyle = 画板.笔迹颜色;
+  ctx.lineWidth = props.compact ? CANVAS.lineWidthCompact : CANVAS.lineWidthNormal;
+  ctx.strokeStyle = CANVAS.inkColor;
   ctx.setLineDash([]);
 }
 
@@ -70,9 +70,9 @@ function sizeCanvas() {
 
   const w = Math.round(frame.clientWidth);
   const h = Math.round(frame.clientHeight);
-  if (w < 画板.最小有效边长 || h < 画板.最小有效边长) return;
+  if (w < CANVAS.minValidSize || h < CANVAS.minValidSize) return;
 
-  const dpr = Math.min(window.devicePixelRatio || 1, 画板.最大设备像素比);
+  const dpr = Math.min(window.devicePixelRatio || 1, CANVAS.maxDevicePixelRatio);
   const nextBw = Math.round(w * dpr);
   const nextBh = Math.round(h * dpr);
 
@@ -97,17 +97,17 @@ function sizeCanvas() {
  * @副作用 重绘 canvas
  */
 function drawGuides() {
-  if (!ctx || cssW < 画板.最小有效边长 || cssH < 画板.最小有效边长) return;
+  if (!ctx || cssW < CANVAS.minValidSize || cssH < CANVAS.minValidSize) return;
   const w = cssW;
   const h = cssH;
   applyStrokeStyle();
   ctx.clearRect(0, 0, w, h);
   ctx.save();
   ctx.strokeStyle = guideStroke.value;
-  ctx.lineWidth = 画板.辅助线线宽;
-  ctx.setLineDash([...画板.辅助线虚线]);
+  ctx.lineWidth = CANVAS.guideLineWidth;
+  ctx.setLineDash([...CANVAS.guideDash]);
   ctx.beginPath();
-  const m = 画板.辅助线边距;
+  const m = CANVAS.guideInset;
   ctx.moveTo(w / 2, m);
   ctx.lineTo(w / 2, h - m);
   ctx.moveTo(m, h / 2);
@@ -339,7 +339,7 @@ function clear() {
 function getSnapshot(): string {
   const canvas = canvasRef.value;
   if (!canvas) return "";
-  return canvas.toDataURL(画板.快照格式);
+  return canvas.toDataURL(CANVAS.snapshotMime);
 }
 
 watch(

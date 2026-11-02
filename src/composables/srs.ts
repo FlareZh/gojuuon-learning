@@ -2,14 +2,14 @@
  * 阶段阶梯式间隔重复（非 FSRS）的统计与排程辅助。
  */
 import {
-  Srs阶段,
-  到期展示阈值,
-  答对间隔毫秒,
-  答错阶段回退,
-  旧版存储键,
-  本地存储前缀,
-  毫秒,
-  进度色调,
+  CORRECT_INTERVAL_MS,
+  DUE_LABEL_THRESHOLDS,
+  LEGACY_STORAGE_KEYS,
+  MS,
+  PROGRESS_TONE,
+  STORAGE_PREFIX,
+  SrsStageLevel,
+  WRONG_STAGE_PENALTY,
 } from "@/constants/product";
 
 /** SRS 阶段字面量类型：0 新卡 … 5 成熟 */
@@ -37,13 +37,14 @@ export const EMPTY_STATS: ItemStats = {
   currentWrong: 0,
   maxCorrect: 0,
   maxWrong: 0,
-  stage: Srs阶段.新卡,
+  stage: SrsStageLevel.NEW,
   dueAt: null,
   lastReviewedAt: null,
 };
 
 /**
  * 复制一份空的统计对象。
+ * @param 无
  * @returns 独立的空 {@link ItemStats}
  * @副作用 无
  */
@@ -58,9 +59,9 @@ export function emptyStats(): ItemStats {
  * @副作用 无
  */
 export function stageLabel(stage: SrsStage): string {
-  if (stage === Srs阶段.新卡) return "新卡";
-  if (stage <= Srs阶段.学习上限) return "学习中";
-  if (stage <= Srs阶段.复习上限) return "复习中";
+  if (stage === SrsStageLevel.NEW) return "新卡";
+  if (stage <= SrsStageLevel.LEARNING_MAX) return "学习中";
+  if (stage <= SrsStageLevel.REVIEW_MAX) return "复习中";
   return "成熟";
 }
 
@@ -71,7 +72,7 @@ export function stageLabel(stage: SrsStage): string {
  * @副作用 无
  */
 export function clampStage(n: number): SrsStage {
-  const v = Math.max(Srs阶段.新卡, Math.min(Srs阶段.最大值, Math.round(n)));
+  const v = Math.max(SrsStageLevel.NEW, Math.min(SrsStageLevel.MAX, Math.round(n)));
   return v as SrsStage;
 }
 
@@ -83,7 +84,10 @@ export function clampStage(n: number): SrsStage {
  */
 export function isNewCard(stats: ItemStats): boolean {
   return (
-    stats.stage === Srs阶段.新卡 && stats.dueAt === null && stats.correct === 0 && stats.wrong === 0
+    stats.stage === SrsStageLevel.NEW &&
+    stats.dueAt === null &&
+    stats.correct === 0 &&
+    stats.wrong === 0
   );
 }
 
@@ -107,7 +111,7 @@ export function isDue(stats: ItemStats, now: number): boolean {
  */
 export function isIntroducedPending(stats: ItemStats): boolean {
   return (
-    stats.stage === Srs阶段.新卡 &&
+    stats.stage === SrsStageLevel.NEW &&
     stats.dueAt != null &&
     stats.correct === 0 &&
     stats.wrong === 0 &&
@@ -134,17 +138,17 @@ export function isReviewDue(stats: ItemStats, now: number): boolean {
  */
 export function progressTone(stats: ItemStats): string {
   if (stats.currentWrong > 0 || (stats.wrong > stats.correct && stats.wrong > 0)) {
-    return 进度色调.易错;
+    return PROGRESS_TONE.weak;
   }
   if (
     isNewCard(stats) ||
-    (stats.stage === Srs阶段.新卡 && stats.correct === 0 && stats.wrong === 0)
+    (stats.stage === SrsStageLevel.NEW && stats.correct === 0 && stats.wrong === 0)
   ) {
-    return 进度色调.未练;
+    return PROGRESS_TONE.idle;
   }
-  if (stats.stage >= Srs阶段.成熟) return 进度色调.成熟;
-  if (stats.stage >= Srs阶段.复习起点) return 进度色调.复习中;
-  return 进度色调.学习中;
+  if (stats.stage >= SrsStageLevel.MATURE) return PROGRESS_TONE.mature;
+  if (stats.stage >= SrsStageLevel.REVIEW_MIN) return PROGRESS_TONE.review;
+  return PROGRESS_TONE.learning;
 }
 
 /**
@@ -158,8 +162,8 @@ export function progressTone(stats: ItemStats): string {
 export function applySrsGrade(prev: ItemStats, correct: boolean, now = Date.now()): ItemStats {
   if (correct) {
     const currentCorrect = prev.currentCorrect + 1;
-    const nextStage = clampStage(Math.min(Srs阶段.最大值, prev.stage + 1));
-    const interval = 答对间隔毫秒[prev.stage as keyof typeof 答对间隔毫秒];
+    const nextStage = clampStage(Math.min(SrsStageLevel.MAX, prev.stage + 1));
+    const interval = CORRECT_INTERVAL_MS[prev.stage as keyof typeof CORRECT_INTERVAL_MS];
     return {
       correct: prev.correct + 1,
       wrong: prev.wrong,
@@ -174,7 +178,7 @@ export function applySrsGrade(prev: ItemStats, correct: boolean, now = Date.now(
   }
 
   const currentWrong = prev.currentWrong + 1;
-  const nextStage = clampStage(Math.max(Srs阶段.新卡, prev.stage - 答错阶段回退));
+  const nextStage = clampStage(Math.max(SrsStageLevel.NEW, prev.stage - WRONG_STAGE_PENALTY));
   return {
     correct: prev.correct,
     wrong: prev.wrong + 1,
@@ -195,10 +199,10 @@ export function applySrsGrade(prev: ItemStats, correct: boolean, now = Date.now(
  * @副作用 无
  */
 function mapLegacyStreakToStage(currentCorrect: number): SrsStage {
-  if (currentCorrect <= 0) return Srs阶段.新卡;
+  if (currentCorrect <= 0) return SrsStageLevel.NEW;
   if (currentCorrect === 1) return 1;
   if (currentCorrect === 2) return 2;
-  return Srs阶段.复习起点;
+  return SrsStageLevel.REVIEW_MIN;
 }
 
 /**
@@ -226,7 +230,7 @@ function normalizeItem(raw: Partial<ItemStats> & Record<string, unknown>): ItemS
       currentWrong,
       maxCorrect,
       maxWrong,
-      stage: clampStage(typeof raw.stage === "number" ? raw.stage : Srs阶段.新卡),
+      stage: clampStage(typeof raw.stage === "number" ? raw.stage : SrsStageLevel.NEW),
       dueAt: typeof raw.dueAt === "number" ? raw.dueAt : raw.dueAt === null ? null : null,
       lastReviewedAt:
         typeof raw.lastReviewedAt === "number"
@@ -259,7 +263,7 @@ function normalizeItem(raw: Partial<ItemStats> & Record<string, unknown>): ItemS
  * 迁移整表统计；若为空则尝试读取旧版连对键。
  * @param existing - 当前 stats 映射
  * @returns 规范化后的完整映射
- * @副作用 可能读取 localStorage 旧键 `streaks`（只读）
+ * @副作用 可能读取 localStorage 旧键 streaks（只读）
  */
 export function migrateStatsMap(
   existing: Record<string, Partial<ItemStats>>,
@@ -271,7 +275,7 @@ export function migrateStatsMap(
 
   if (Object.keys(next).length === 0) {
     try {
-      const raw = localStorage.getItem(`${本地存储前缀}${旧版存储键.连对}`);
+      const raw = localStorage.getItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.streaks}`);
       if (raw) {
         const legacy = JSON.parse(raw) as Record<string, number>;
         for (const [key, value] of Object.entries(legacy)) {
@@ -304,13 +308,15 @@ export function formatDue(dueAt: number | null, now = Date.now()): string {
   const delta = dueAt - now;
   if (delta <= 0) return "已到期";
 
-  const minutes = Math.round(delta / 毫秒.每分钟);
-  if (minutes < 到期展示阈值.分钟改小时) return `${Math.max(1, minutes)} 分钟后`;
+  const minutes = Math.round(delta / MS.MINUTE);
+  if (minutes < DUE_LABEL_THRESHOLDS.minutesBeforeHours) {
+    return `${Math.max(1, minutes)} 分钟后`;
+  }
 
-  const hours = Math.round(delta / 毫秒.每小时);
-  if (hours < 到期展示阈值.小时改天) return `${hours} 小时后`;
+  const hours = Math.round(delta / MS.HOUR);
+  if (hours < DUE_LABEL_THRESHOLDS.hoursBeforeDays) return `${hours} 小时后`;
 
-  const days = Math.round(delta / 毫秒.每天);
+  const days = Math.round(delta / MS.DAY);
   return `${days} 天后`;
 }
 

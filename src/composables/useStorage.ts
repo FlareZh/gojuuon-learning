@@ -45,17 +45,3 @@ function readValue<T>(storageKey: string, defaultValue: T): T {
     return defaultValue;
   }
 }
-
-/**
- * 删除带前缀的 localStorage 项。
- * @param key - 逻辑键名（不含前缀）
- * @returns 无
- * @副作用 删除 localStorage 对应项；失败时忽略
- */
-export function clearStorageKey(key: string): void {
-  try {
-    localStorage.removeItem(`${STORAGE_PREFIX}${key}`);
-  } catch {
-    // ignore
-  }
-}

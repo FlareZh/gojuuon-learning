@@ -6,7 +6,7 @@ import type { ScriptKind } from "./gojuuon";
  * 源站仅有清音；浊音 / 半浊音 / 拗音映射到基础清音动图。
  */
 
-/** Source pack uses `hu` for ふ; we rename to `fu` when vendoring. */
+/** 源站用 `hu` 表示 ふ；入库时改名为 `fu`。 */
 const SEION_IDS = [
   "a",
   "i",
@@ -56,11 +56,11 @@ const SEION_IDS = [
   "n",
 ] as const;
 
-export type SeionId = (typeof SEION_IDS)[number];
+type SeionId = (typeof SEION_IDS)[number];
 
 const SEION_SET = new Set<string>(SEION_IDS);
 
-/** Dakuten / handakuten → base seion id used for stroke animation */
+/** 浊音 / 半浊音 → 用于笔顺动图的清音基底 id */
 const DAKUON_BASE: Record<string, SeionId> = {
   ga: "ka",
   gi: "ki",
@@ -126,9 +126,9 @@ const YOUON_PARTS: Record<string, [SeionId, SeionId]> = {
   pyo: ["hi", "yo"],
 };
 
-export type StrokeKind = "exact" | "dakuon-base" | "handakuon-base" | "youon-parts";
+type StrokeKind = "exact" | "dakuon-base" | "handakuon-base" | "youon-parts";
 
-export interface StrokeResolve {
+interface StrokeResolve {
   /** GIF paths under public/strokes/... (respects Vite base) */
   urls: string[];
   kind: StrokeKind;
@@ -215,36 +215,6 @@ export function resolveStrokeAssets(entryId: string, script: ScriptKind): Stroke
     assetIds: [entryId],
     note: null,
   };
-}
-
-/**
- * 判断 id 是否为有独立 GIF 的清音。
- * @param id - 假名 id
- * @returns 是否清音资源 id
- * @副作用 无
- */
-export function isSeionStrokeId(id: string): boolean {
-  return SEION_SET.has(id);
-}
-
-/**
- * 汇总一轮练习所需的去重笔顺 URL（双字体时合并）。
- * @param entryId - 假名 id
- * @param scripts - 本轮字体列表
- * @returns 去重后的 GIF URL
- * @副作用 无
- */
-export function strokeUrlsForRound(entryId: string, scripts: ScriptKind[]): string[] {
-  const seen = new Set<string>();
-  const urls: string[] = [];
-  for (const script of scripts) {
-    for (const url of resolveStrokeAssets(entryId, script).urls) {
-      if (seen.has(url)) continue;
-      seen.add(url);
-      urls.push(url);
-    }
-  }
-  return urls;
 }
 
 /**

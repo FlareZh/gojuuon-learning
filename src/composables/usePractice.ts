@@ -31,9 +31,6 @@ import {
 } from "./srs";
 import { useStorage } from "./useStorage";
 
-export type { ItemStats } from "./srs";
-export { emptyStats, formatDue, progressTone, stageLabel } from "./srs";
-
 export type ScriptMode = "hiragana" | "katakana" | "both";
 export type OrderMode = "sequential" | "random";
 
@@ -45,10 +42,10 @@ export interface PracticeSettings {
   enabledGroups: KanaGroup[];
 }
 
-/** 一轮练习：同一罗马音下的一个或多个字体（当前产品每次只出一种字体） */
+/** 一轮练习：单一假名条目 × 一种字体 */
 export interface PracticeRound {
   entry: KanaEntry;
-  scripts: ScriptKind[];
+  script: ScriptKind;
 }
 
 /** 进度面板一行数据 */
@@ -101,7 +98,7 @@ const EMPTY_SESSION: SessionSnapshot = {
  * @returns 唯一键字符串
  * @副作用 无
  */
-export function itemKey(entryId: string, script: ScriptKind): string {
+function itemKey(entryId: string, script: ScriptKind): string {
   return `${entryId}:${script}`;
 }
 
@@ -121,7 +118,7 @@ function parseItemKey(key: string): { entryId: string; script: ScriptKind } | nu
 }
 
 /**
- * 根据练习模式展开需要练习的字体列表。
+ * 根据练习模式展开需要练习的字体列表（「两者」时各出各的卡）。
  * @param mode - 平 / 片 / 两者
  * @returns 字体数组
  * @副作用 无
@@ -130,6 +127,22 @@ function scriptsForMode(mode: ScriptMode): ScriptKind[] {
   if (mode === "hiragana") return ["hiragana"];
   if (mode === "katakana") return ["katakana"];
   return ["hiragana", "katakana"];
+}
+
+/**
+ * 将未知值规范为合法字体；兼容旧版 `ScriptKind[]` 持久化。
+ * @param raw - 原始值
+ * @returns 字体或 null
+ * @副作用 无
+ */
+function coerceScript(raw: unknown): ScriptKind | null {
+  if (raw === "hiragana" || raw === "katakana") return raw;
+  if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (item === "hiragana" || item === "katakana") return item;
+    }
+  }
+  return null;
 }
 
 /**
@@ -212,7 +225,7 @@ export function usePractice() {
   const settings = useStorage<PracticeSettings>(STORAGE_KEYS.settings, { ...DEFAULT_SETTINGS });
   const stats = useStorage<Record<string, ItemStats>>(STORAGE_KEYS.stats, {});
   const currentEntryId = useStorage<string | null>(STORAGE_KEYS.currentEntryId, null);
-  const currentScripts = useStorage<ScriptKind[]>(STORAGE_KEYS.currentScripts, []);
+  const currentScript = useStorage<ScriptKind | null>(STORAGE_KEYS.currentScript, null);
   const session = useStorage<SessionSnapshot>(STORAGE_KEYS.session, { ...EMPTY_SESSION });
 
   settings.value = mergeSettings(
@@ -224,6 +237,23 @@ export function usePractice() {
     ...session.value,
     buryUntil: session.value.buryUntil ?? {},
   };
+
+  // 从旧键 currentScripts（可能为数组）迁移到单值 currentScript
+  if (currentScript.value == null) {
+    try {
+      const legacyRaw = localStorage.getItem(
+        `${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.currentScripts}`,
+      );
+      if (legacyRaw != null) {
+        currentScript.value = coerceScript(JSON.parse(legacyRaw) as unknown);
+        localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.currentScripts}`);
+      }
+    } catch {
+      // 忽略损坏的旧数据
+    }
+  } else {
+    currentScript.value = coerceScript(currentScript.value);
+  }
 
   const current = ref<PracticeRound | null>(null);
 
@@ -347,6 +377,24 @@ export function usePractice() {
   }
 
   /**
+   * 将卡片键解析为合法练习轮次（字体需落在当前模式内）。
+   * @param key - 卡片键
+   * @returns 练习轮次；非法或缺条目时 null
+   * @副作用 无
+   */
+  function roundFromCardKey(key: string): PracticeRound | null {
+    const parsed = parseItemKey(key);
+    if (!parsed) return null;
+    const entry = entryById.value.get(parsed.entryId);
+    if (!entry) return null;
+    const modeScripts = scriptsForMode(settings.value.scriptMode);
+    const script = modeScripts.includes(parsed.script)
+      ? parsed.script
+      : (modeScripts[0] ?? parsed.script);
+    return { entry, script };
+  }
+
+  /**
    * 引入下一张从未练过的新卡，并消耗今日新卡额度。
    * @param now - 当前时间
    * @param excludeEntryId - 可选：避免与刚练过的假名重复
@@ -370,15 +418,8 @@ export function usePractice() {
     const nextKey = sortOrShuffle(preferred.length > 0 ? preferred : fresh)[0];
     if (!nextKey) return null;
 
-    const parsed = parseItemKey(nextKey);
-    if (!parsed) return null;
-    const entry = entryById.value.get(parsed.entryId);
-    if (!entry) return null;
-
-    const modeScripts = scriptsForMode(settings.value.scriptMode);
-    const script = modeScripts.includes(parsed.script)
-      ? parsed.script
-      : (modeScripts[0] ?? parsed.script);
+    const round = roundFromCardKey(nextKey);
+    if (!round) return null;
 
     const prev = getStats(nextKey);
     stats.value = {
@@ -390,11 +431,11 @@ export function usePractice() {
       newIntroduced: session.value.newIntroduced + 1,
     };
 
-    return { entry, scripts: [script] };
+    return round;
   }
 
   /**
-   * 从队列取出下一轮（单字体）；必要时引入新卡或轮转暂避卡。
+   * 从队列取出下一轮；必要时引入新卡或轮转暂避卡。
    * @param excludeEntryId - 可选：推进时避开的假名 id
    * @returns 下一轮练习；今日无可练时 null
    * @副作用 弹出队列、清暂避、可能引入新卡
@@ -403,7 +444,6 @@ export function usePractice() {
     const now = Date.now();
     refillQueueIfNeeded(now);
 
-    const modeScripts = scriptsForMode(settings.value.scriptMode);
     const rotated = new Set<string>();
     let guard = 0;
     while (guard++ < TAKE_ROUND_GUARD_LIMIT) {
@@ -443,8 +483,8 @@ export function usePractice() {
         }
       }
 
-      const entry = entryById.value.get(parsed.entryId);
-      if (!entry) {
+      const round = roundFromCardKey(firstKey);
+      if (!round) {
         session.value = { ...session.value, queue: session.value.queue.slice(1) };
         continue;
       }
@@ -454,11 +494,7 @@ export function usePractice() {
         queue: session.value.queue.slice(1),
       };
       clearBury(firstKey);
-
-      const script = modeScripts.includes(parsed.script)
-        ? parsed.script
-        : (modeScripts[0] ?? parsed.script);
-      return { entry, scripts: [script] };
+      return round;
     }
 
     return null;
@@ -473,7 +509,7 @@ export function usePractice() {
   function setCurrent(round: PracticeRound | null) {
     current.value = round;
     currentEntryId.value = round?.entry.id ?? null;
-    currentScripts.value = round?.scripts ?? [];
+    currentScript.value = round?.script ?? null;
   }
 
   /**
@@ -487,7 +523,7 @@ export function usePractice() {
   }
 
   /**
-   * 尝试从持久化的 currentEntryId / scripts 恢复当前轮。
+   * 尝试从持久化的 currentEntryId / currentScript 恢复当前轮。
    * @returns 是否恢复成功
    * @副作用 可能写 `current`
    */
@@ -498,11 +534,11 @@ export function usePractice() {
     if (!entry) return false;
 
     const allowed = scriptsForMode(settings.value.scriptMode);
-    const preferred = currentScripts.value.find((s) => allowed.includes(s));
-    const script = preferred ?? allowed[0];
+    const preferred = coerceScript(currentScript.value);
+    const script = preferred && allowed.includes(preferred) ? preferred : (allowed[0] ?? null);
     if (!script) return false;
 
-    current.value = { entry, scripts: [script] };
+    current.value = { entry, script };
     return true;
   }
 
@@ -523,26 +559,27 @@ export function usePractice() {
       return;
     }
     const allowed = scriptsForMode(settings.value.scriptMode);
-    const script = current.value.scripts.find((s) => allowed.includes(s)) ?? allowed[0];
+    const script = allowed.includes(current.value.script)
+      ? current.value.script
+      : (allowed[0] ?? null);
     if (!script) {
       advance(entry.id);
       return;
     }
-    setCurrent({ entry, scripts: [script] });
+    setCurrent({ entry, script });
   }
 
   /**
-   * 对当前轮某一字体自评对错，并更新 SRS / 队列。
-   * @param script - 被批改的字体
+   * 对当前轮自评对错，并更新 SRS / 队列。
    * @param correct - 是否正确
    * @returns 无
    * @副作用 写 stats、session（含答错再入队与暂避）
    */
-  function gradeScript(script: ScriptKind, correct: boolean) {
+  function gradeCurrent(correct: boolean) {
     const round = current.value;
-    if (!round || !round.scripts.includes(script)) return;
+    if (!round) return;
 
-    const key = itemKey(round.entry.id, script);
+    const key = itemKey(round.entry.id, round.script);
     const now = Date.now();
     const next = applySrsGrade(getStats(key), correct, now);
     stats.value = { ...stats.value, [key]: next };
@@ -588,12 +625,13 @@ export function usePractice() {
   function resetProgress() {
     stats.value = {};
     currentEntryId.value = null;
-    currentScripts.value = [];
+    currentScript.value = null;
     session.value = { ...EMPTY_SESSION, date: localDateKey() };
     try {
       localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.streaks}`);
       localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.randomQueue}`);
       localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.sequentialIndex}`);
+      localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.currentScripts}`);
     } catch {
       // ignore
     }
@@ -607,10 +645,6 @@ export function usePractice() {
    */
   function restartFromBeginning() {
     ensureSessionDay();
-    session.value = {
-      ...session.value,
-      queue: [],
-    };
     session.value = {
       ...session.value,
       queue: buildSessionQueue(),
@@ -690,24 +724,21 @@ export function usePractice() {
 
   return {
     settings,
-    stats,
     current,
     dueCount,
     newRemainingToday,
     reviewedToday,
-    newCardsPerDay: computed(() => settings.value.newCardsPerDay),
     progressRows,
-    gradeScript,
+    gradeCurrent,
     nextRound,
     resetProgress,
     restartFromBeginning,
     updateSettings,
     scriptLabel,
     /**
-     * 当前轮指定字体的假名字形。
-     * @param script - 字体
+     * 当前轮假名字形。
      * @returns 假名字符串；无当前轮时为空串
      */
-    kanaFor: (script: ScriptKind) => (current.value ? kanaGlyph(current.value.entry, script) : ""),
+    currentKana: () => (current.value ? kanaGlyph(current.value.entry, current.value.script) : ""),
   };
 }

@@ -12,7 +12,7 @@ export const STORAGE_KEYS = {
   settings: "settings",
   stats: "stats",
   currentEntryId: "currentEntryId",
-  currentScripts: "currentScripts",
+  currentScript: "currentScript",
   session: "session",
 } as const;
 
@@ -21,6 +21,8 @@ export const LEGACY_STORAGE_KEYS = {
   streaks: "streaks",
   randomQueue: "randomQueue",
   sequentialIndex: "sequentialIndex",
+  /** 曾存 `ScriptKind[]`，现已改为单值 `currentScript` */
+  currentScripts: "currentScripts",
 } as const;
 
 /** SRS 阶段地标：0 新卡 → 5 成熟 */
@@ -90,8 +92,6 @@ export const CANVAS = {
   maxDevicePixelRatio: 3,
   /** 普通线宽（CSS 像素） */
   lineWidthNormal: 4,
-  /** 双栏紧凑线宽 */
-  lineWidthCompact: 3.2,
   /** 田字格辅助线边距 */
   guideInset: 12,
   /** 辅助线虚线样式 */

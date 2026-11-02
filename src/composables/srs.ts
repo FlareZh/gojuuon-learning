@@ -30,7 +30,7 @@ export interface ItemStats {
 }
 
 /** 空统计模板（新卡初始态） */
-export const EMPTY_STATS: ItemStats = {
+const EMPTY_STATS: ItemStats = {
   correct: 0,
   wrong: 0,
   currentCorrect: 0,

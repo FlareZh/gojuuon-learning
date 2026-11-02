@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import DrawingBoard from "@/components/DrawingBoard.vue";
 import ProgressPanel from "@/components/ProgressPanel.vue";
 import SettingsPanel from "@/components/SettingsPanel.vue";
@@ -8,8 +8,7 @@ import { useFeedbackMail } from "@/composables/useFeedbackMail";
 import { usePractice } from "@/composables/usePractice";
 import { AUTO_ADVANCE_AFTER_GRADE_MS, STROKE_PREFETCH } from "@/constants/product";
 import { FEEDBACK_ISSUES_URL } from "@/constants/links";
-import type { ScriptKind } from "@/data/gojuuon";
-import { allSeionStrokeUrls, prefetchStrokeUrls, strokeUrlsForRound } from "@/data/strokeAssets";
+import { allSeionStrokeUrls, prefetchStrokeUrls, resolveStrokeAssets } from "@/data/strokeAssets";
 
 /** 界面阶段：书写 / 对照自评 */
 type Phase = "draw" | "review";
@@ -23,13 +22,13 @@ const {
   newRemainingToday,
   reviewedToday,
   progressRows,
-  gradeScript,
+  gradeCurrent,
   nextRound,
   resetProgress,
   restartFromBeginning,
   updateSettings,
   scriptLabel,
-  kanaFor,
+  currentKana,
 } = usePractice();
 
 const settingsOpen = ref(false);
@@ -38,25 +37,11 @@ const clearToken = ref(0);
 const strokePlayToken = ref(0);
 const phase = ref<Phase>("draw");
 
-const boardRefs = ref<Record<string, InstanceType<typeof DrawingBoard> | null>>({});
-const snapshots = reactive<Partial<Record<ScriptKind, string>>>({});
-const graded = reactive<Partial<Record<ScriptKind, boolean | null>>>({});
-
-const activeScripts = computed(() => current.value?.scripts ?? []);
-const dual = computed(() => activeScripts.value.length > 1);
+const boardRef = ref<InstanceType<typeof DrawingBoard> | null>(null);
+const snapshot = ref("");
+const graded = ref<boolean | null>(null);
 
 let advanceTimer: ReturnType<typeof setTimeout> | null = null;
-
-/**
- * 保存某一字体画板组件实例的模板引用。
- * @param script - 字体
- * @param el - Vue 组件实例或 null
- * @returns 无
- * @副作用 写入 `boardRefs`
- */
-function setBoardRef(script: ScriptKind, el: unknown) {
-  boardRefs.value[script] = (el as InstanceType<typeof DrawingBoard> | null) ?? null;
-}
 
 /**
  * 取消「自评完成后自动下一题」定时器。
@@ -73,18 +58,22 @@ function clearAdvanceTimer() {
 /**
  * 重置本轮 UI：回到书写阶段、清空快照与评分、强制清空画板。
  * @returns 无
- * @副作用 改 phase / snapshots / graded / clearToken；清定时器
+ * @副作用 改 phase / snapshot / graded / clearToken；清定时器
  */
 function resetRoundUi() {
   clearAdvanceTimer();
   phase.value = "draw";
-  for (const key of Object.keys(snapshots) as ScriptKind[]) delete snapshots[key];
-  for (const key of Object.keys(graded) as ScriptKind[]) delete graded[key];
+  snapshot.value = "";
+  graded.value = null;
   clearToken.value += 1;
 }
 
 watch(
-  () => [current.value?.entry.id, (current.value?.scripts ?? []).join(",")].join("|"),
+  () => {
+    const round = current.value;
+    if (!round) return "";
+    return `${round.entry.id}|${round.script}`;
+  },
   () => {
     resetRoundUi();
   },
@@ -94,11 +83,11 @@ watch(
   () => {
     const round = current.value;
     if (!round) return "";
-    return `${round.entry.id}|${round.scripts.join(",")}`;
+    return `${round.entry.id}|${round.script}`;
   },
   (key) => {
     if (!key || !current.value) return;
-    prefetchStrokeUrls(strokeUrlsForRound(current.value.entry.id, current.value.scripts));
+    prefetchStrokeUrls(resolveStrokeAssets(current.value.entry.id, current.value.script).urls);
   },
   { immediate: true },
 );
@@ -115,26 +104,14 @@ onMounted(() => {
 /**
  * 提交书写：截图并进入对照自评阶段。
  * @returns 无
- * @副作用 写 snapshots / graded / phase；递增笔顺播放令牌
+ * @副作用 写 snapshot / graded / phase；递增笔顺播放令牌
  */
 function submit() {
   clearAdvanceTimer();
-  for (const script of activeScripts.value) {
-    snapshots[script] = boardRefs.value[script]?.getSnapshot() ?? "";
-    graded[script] = null;
-  }
+  snapshot.value = boardRef.value?.getSnapshot() ?? "";
+  graded.value = null;
   strokePlayToken.value += 1;
   phase.value = "review";
-}
-
-/**
- * 某字体是否已完成自评。
- * @param script - 字体
- * @returns 是否已评
- * @副作用 无
- */
-function isGraded(script: ScriptKind) {
-  return graded[script] === true || graded[script] === false;
 }
 
 /**
@@ -149,19 +126,15 @@ async function goNext() {
 }
 
 /**
- * 处理自评按钮：记分；全部评完后短暂延迟自动下一题。
- * @param script - 被评字体
+ * 处理自评按钮：记分后短暂延迟自动下一题。
  * @param correct - 是否正确
  * @returns 无
- * @副作用 写 graded、调用 gradeScript、可能启动定时器
+ * @副作用 写 graded、调用 gradeCurrent、启动定时器
  */
-function onGrade(script: ScriptKind, correct: boolean) {
-  if (isGraded(script)) return;
-  graded[script] = correct;
-  gradeScript(script, correct);
-
-  const done = activeScripts.value.every(isGraded);
-  if (!done) return;
+function onGrade(correct: boolean) {
+  if (graded.value !== null) return;
+  graded.value = correct;
+  gradeCurrent(correct);
 
   clearAdvanceTimer();
   advanceTimer = setTimeout(() => {
@@ -172,20 +145,13 @@ function onGrade(script: ScriptKind, correct: boolean) {
 
 onUnmounted(clearAdvanceTimer);
 
-/** 单字体时提示区着色；双字体保持中性 both */
-const promptScript = computed(() => {
-  const scripts = activeScripts.value;
-  if (scripts.length === 1) return scripts[0]!;
-  if (scripts.length > 1) return "both" as const;
-  return null;
-});
+/** 提示区着色用的当前字体 */
+const promptScript = computed(() => current.value?.script ?? null);
 
-/** 提示区大标题文案（平假名 / 片假名 / 平·片） */
+/** 提示区大标题文案（平假名 / 片假名） */
 const promptScriptTitle = computed(() => {
   const script = promptScript.value;
-  if (script === "hiragana" || script === "katakana") return scriptLabel(script);
-  if (script === "both") return "平假名 · 片假名";
-  return "";
+  return script ? scriptLabel(script) : "";
 });
 </script>
 
@@ -206,7 +172,7 @@ const promptScriptTitle = computed(() => {
       <template v-if="current">
         <section
           class="prompt"
-          :key="`${current.entry.id}-${activeScripts.join(',')}`"
+          :key="`${current.entry.id}-${current.script}`"
           :data-script="promptScript ?? undefined"
           aria-live="polite"
         >
@@ -217,16 +183,8 @@ const promptScriptTitle = computed(() => {
 
         <!-- Draw phase -->
         <template v-if="phase === 'draw'">
-          <section class="boards" :class="{ 'boards--dual': dual }">
-            <DrawingBoard
-              v-for="script in activeScripts"
-              :key="script"
-              :ref="(el) => setBoardRef(script, el)"
-              :clear-token="clearToken"
-              :script="script"
-              :label="dual ? scriptLabel(script) : ''"
-              :compact="dual"
-            />
+          <section class="boards">
+            <DrawingBoard ref="boardRef" :clear-token="clearToken" :script="current.script" />
           </section>
 
           <section class="actions">
@@ -237,40 +195,31 @@ const promptScriptTitle = computed(() => {
         <!-- Review phase -->
         <template v-else>
           <section class="reviews">
-            <article v-for="script in activeScripts" :key="script" class="review">
-              <h2 class="review__title">{{ scriptLabel(script) }}</h2>
+            <article class="review">
+              <h2 class="review__title">{{ scriptLabel(current.script) }}</h2>
               <div class="review__compare">
-                <figure class="review__pane" :data-script="script">
+                <figure class="review__pane" :data-script="current.script">
                   <figcaption>你的写法</figcaption>
-                  <img
-                    v-if="snapshots[script]"
-                    class="review__shot"
-                    :src="snapshots[script]"
-                    alt="你的手写"
-                  />
+                  <img v-if="snapshot" class="review__shot" :src="snapshot" alt="你的手写" />
                   <div v-else class="review__empty">未书写</div>
                 </figure>
-                <figure class="review__pane" :data-script="script">
+                <figure class="review__pane" :data-script="current.script">
                   <figcaption>正确写法</figcaption>
                   <StrokeOrder
-                    :kana="kanaFor(script)"
+                    :kana="currentKana()"
                     :entry-id="current.entry.id"
-                    :script="script"
+                    :script="current.script"
                     :play-token="strokePlayToken"
                   />
                 </figure>
               </div>
               <div class="review__grade">
-                <template v-if="graded[script] === null || graded[script] === undefined">
-                  <button type="button" class="btn btn--ok" @click="onGrade(script, true)">
-                    正确
-                  </button>
-                  <button type="button" class="btn btn--bad" @click="onGrade(script, false)">
-                    错误
-                  </button>
+                <template v-if="graded === null">
+                  <button type="button" class="btn btn--ok" @click="onGrade(true)">正确</button>
+                  <button type="button" class="btn btn--bad" @click="onGrade(false)">错误</button>
                 </template>
-                <p v-else class="review__result" :data-ok="graded[script]">
-                  {{ graded[script] ? "已记为正确" : "已记为错误" }}
+                <p v-else class="review__result" :data-ok="graded">
+                  {{ graded ? "已记为正确" : "已记为错误" }}
                 </p>
               </div>
             </article>
@@ -461,11 +410,6 @@ const promptScriptTitle = computed(() => {
   background: linear-gradient(180deg, var(--board-kata), var(--board-kata-deep));
 }
 
-.prompt[data-script="both"] {
-  border-color: rgba(45, 74, 62, 0.22);
-  background: linear-gradient(90deg, var(--board-hira) 0%, var(--board-kata) 100%);
-}
-
 .prompt__script {
   margin: 0;
   font-size: clamp(1.05rem, 4.6vw, 1.4rem);
@@ -481,12 +425,6 @@ const promptScriptTitle = computed(() => {
 
 .prompt[data-script="katakana"] .prompt__script {
   color: #2f6a7c;
-}
-
-.prompt[data-script="both"] .prompt__script {
-  color: #2d4a3e;
-  letter-spacing: 0.12em;
-  text-indent: 0;
 }
 
 .prompt__romaji {
@@ -518,12 +456,6 @@ const promptScriptTitle = computed(() => {
   display: grid;
   grid-template-columns: 1fr;
   gap: 0.75rem;
-}
-
-.boards--dual {
-  grid-template-columns: 1fr;
-  gap: 0.65rem;
-  align-items: start;
 }
 
 .actions {
@@ -733,14 +665,6 @@ const promptScriptTitle = computed(() => {
   .app {
     padding-left: 1.1rem;
     padding-right: 1.1rem;
-  }
-}
-
-/* Tablet / desktop: dual boards side by side */
-@media (min-width: 640px) {
-  .boards--dual {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.55rem;
   }
 }
 </style>

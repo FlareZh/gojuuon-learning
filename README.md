@@ -15,13 +15,17 @@ Vue 3 + Vite + TypeScript 五十音手写练习。罗马音提示，画板书写
 
 ## 反馈 / Issues
 
-**优先**通过 [GitHub Issues](https://github.com/FlareZh/gojuuon-learning/issues) 报告缺陷与建议（便于跟踪与讨论）。应用内设置与页脚也提供同一入口。
+**优先**通过 [GitHub Issues](https://github.com/FlareZh/gojuuon-learning/issues) 报告可复现缺陷（便于跟踪）。应用内设置与页脚也提供同一入口。
 
-也可使用应用内「邮件反馈」：点击后通过本机 `mailto:` 打开邮件客户端，主题预填为 `[五十音帖反馈]`。说明：
+应用内「页内反馈」经 [Web3Forms](https://web3forms.com) 发到维护者邮箱（主题 `[五十音帖反馈]`）。请勿填写密码等敏感信息。
 
-- 请勿在邮件中发送密码或其他敏感信息
-- `mailto:` 依赖本机邮件客户端，部分环境可能无法打开
-- 无公开可投稿的后端表单（避免未鉴权接口被滥用）；收件地址仅在点击时于客户端拼接
+### 配置 Web3Forms（维护者）
+
+1. 在 https://web3forms.com 用收件邮箱注册，取得 **Access Key**
+2. 本地开发：复制 `.env.example` 为 `.env.local`，填入 `VITE_WEB3FORMS_ACCESS_KEY`
+3. 部署：在仓库 **Settings → Secrets and variables → Actions** 添加同名 secret；`Deploy GitHub Pages` workflow 会注入构建
+
+未配置 key 时，页内表单会提示改用 Issues。
 
 ## 许可
 

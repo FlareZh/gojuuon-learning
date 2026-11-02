@@ -66,14 +66,16 @@ input {
   font: inherit;
 }
 
-/* Allow editing the daily-new-cards number in settings */
-input {
+/* Allow editing text fields (settings number, feedback form) */
+input,
+textarea {
   -webkit-user-select: text;
   user-select: text;
 }
 
 button:focus-visible,
-input:focus-visible {
+input:focus-visible,
+textarea:focus-visible {
   outline: 2px solid rgba(45, 74, 62, 0.45);
   outline-offset: 2px;
 }

@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { ALL_KANA_GROUPS, KANA_GROUP_LABELS, NEW_CARDS_PER_DAY } from "@/constants/product";
-import { useFeedbackMail } from "@/composables/useFeedbackMail";
 import type { OrderMode, PracticeSettings, ScriptMode } from "@/composables/usePractice";
 import type { KanaGroup } from "@/data/gojuuon";
 import { FEEDBACK_ISSUES_URL } from "@/constants/links";
@@ -15,12 +14,11 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   close: [];
+  feedback: [];
   update: [patch: Partial<PracticeSettings>];
   reset: [];
   restart: [];
 }>();
-
-const { coolingDown, openFeedbackMail } = useFeedbackMail();
 
 const groupLabels = KANA_GROUP_LABELS;
 const allGroups = [...ALL_KANA_GROUPS] as KanaGroup[];
@@ -195,16 +193,11 @@ function toggleGroup(group: KanaGroup) {
         >
           反馈 / Issues
         </a>
-        <button
-          type="button"
-          class="sheet__feedback-mail"
-          :disabled="coolingDown"
-          @click="openFeedbackMail"
-        >
-          {{ coolingDown ? "请稍候…" : "邮件反馈" }}
+        <button type="button" class="sheet__feedback-mail" @click="emit('feedback')">
+          页内反馈
         </button>
       </div>
-      <p class="sheet__hint">缺陷请优先用 Issues；邮件会打开本机邮件客户端，请勿发送密码。</p>
+      <p class="sheet__hint">缺陷请优先用 Issues；页内反馈会发到维护者邮箱，请勿填写密码。</p>
       <button type="button" class="sheet__reset" @click="$emit('reset')">重置进度</button>
     </aside>
   </div>

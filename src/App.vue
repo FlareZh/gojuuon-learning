@@ -1,10 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import DrawingBoard from "@/components/DrawingBoard.vue";
+import FeedbackPanel from "@/components/FeedbackPanel.vue";
 import ProgressPanel from "@/components/ProgressPanel.vue";
 import SettingsPanel from "@/components/SettingsPanel.vue";
 import StrokeOrder from "@/components/StrokeOrder.vue";
-import { useFeedbackMail } from "@/composables/useFeedbackMail";
 import { usePractice } from "@/composables/usePractice";
 import { AUTO_ADVANCE_AFTER_GRADE_MS, STROKE_PREFETCH } from "@/constants/product";
 import { FEEDBACK_ISSUES_URL } from "@/constants/links";
@@ -13,7 +13,7 @@ import { allSeionStrokeUrls, prefetchStrokeUrls, resolveStrokeAssets } from "@/d
 /** 界面阶段：书写 / 对照自评 */
 type Phase = "draw" | "review";
 
-const { coolingDown, openFeedbackMail } = useFeedbackMail();
+const feedbackOpen = ref(false);
 
 const {
   settings,
@@ -250,15 +250,10 @@ const promptScriptTitle = computed(() => {
     <footer class="app-footer">
       <a :href="FEEDBACK_ISSUES_URL" target="_blank" rel="noopener noreferrer">反馈 / Issues</a>
       <span class="app-footer__sep" aria-hidden="true">·</span>
-      <button
-        type="button"
-        class="app-footer__mail"
-        :disabled="coolingDown"
-        @click="openFeedbackMail"
-      >
-        {{ coolingDown ? "请稍候…" : "邮件反馈" }}
-      </button>
+      <button type="button" class="app-footer__mail" @click="feedbackOpen = true">页内反馈</button>
     </footer>
+
+    <FeedbackPanel :open="feedbackOpen" @close="feedbackOpen = false" />
 
     <SettingsPanel
       :open="settingsOpen"
@@ -267,6 +262,10 @@ const promptScriptTitle = computed(() => {
       :new-remaining-today="newRemainingToday"
       :reviewed-today="reviewedToday"
       @close="settingsOpen = false"
+      @feedback="
+        settingsOpen = false;
+        feedbackOpen = true;
+      "
       @update="updateSettings"
       @restart="
         restartFromBeginning();

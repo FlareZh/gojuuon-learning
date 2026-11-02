@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
+import { PROGRESS_TONE } from "@/constants/product";
 import type { ProgressRow } from "@/composables/usePractice";
-import { GOJUUON_CHART } from "@/data/gojuuonChart";
 import type { ScriptKind } from "@/data/gojuuon";
+import { GOJUUON_CHART } from "@/data/gojuuonChart";
 
 const props = defineProps<{
   open: boolean;
@@ -30,6 +31,7 @@ watch(tab, () => {
   selectedKey.value = null;
 });
 
+/** 当前 Tab 字体下按 entryId 索引的进度行 */
 const rowByKey = computed(() => {
   const map = new Map<string, ProgressRow>();
   for (const row of props.rows) {
@@ -38,12 +40,13 @@ const rowByKey = computed(() => {
   return map;
 });
 
+/** 当前 Tab 的汇总计数（已练 / 学习 / 复习 / 成熟） */
 const summary = computed(() => {
   const rows = props.rows.filter((row) => row.script === tab.value);
   const practiced = rows.filter((row) => row.stats.correct > 0 || row.stats.wrong > 0);
   const mature = rows.filter((row) => row.mastered);
-  const learning = rows.filter((row) => row.tone === "learning");
-  const review = rows.filter((row) => row.tone === "review");
+  const learning = rows.filter((row) => row.tone === PROGRESS_TONE.learning);
+  const review = rows.filter((row) => row.tone === PROGRESS_TONE.review);
   return {
     total: rows.length,
     practiced: practiced.length,
@@ -53,15 +56,28 @@ const summary = computed(() => {
   };
 });
 
+/** 当前选中单元格的详情行 */
 const selected = computed(() => {
   if (!selectedKey.value) return null;
   return rowByKey.value.get(selectedKey.value) ?? null;
 });
 
+/**
+ * 格子色调（无数据时为未练）。
+ * @param row - 进度行
+ * @returns data-tone 字符串
+ * @副作用 无
+ */
 function cellTone(row: ProgressRow | undefined): string {
-  return row?.tone ?? "idle";
+  return row?.tone ?? PROGRESS_TONE.idle;
 }
 
+/**
+ * 点选五十音格：再次点同一格则取消选中。
+ * @param entryId - 假名 id；空格忽略
+ * @returns 无
+ * @副作用 更新 `selectedKey`
+ */
 function selectCell(entryId: string | null) {
   if (!entryId) return;
   selectedKey.value = selectedKey.value === entryId ? null : entryId;

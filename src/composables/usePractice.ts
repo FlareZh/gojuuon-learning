@@ -1,5 +1,15 @@
 import { computed, ref, watch } from "vue";
 import {
+  DEFAULT_PRACTICE_SETTINGS,
+  LEGACY_STORAGE_KEYS,
+  NEW_CARDS_PER_DAY,
+  STORAGE_KEYS,
+  STORAGE_PREFIX,
+  SrsStageLevel,
+  TAKE_ROUND_GUARD_LIMIT,
+  WRONG_REQUEUE_GAP,
+} from "@/constants/product";
+import {
   GOJUUON,
   kanaGlyph,
   type KanaEntry,
@@ -27,6 +37,7 @@ export { emptyStats, formatDue, progressTone, stageLabel } from "./srs";
 export type ScriptMode = "hiragana" | "katakana" | "both";
 export type OrderMode = "sequential" | "random";
 
+/** 练习全局设置 */
 export interface PracticeSettings {
   scriptMode: ScriptMode;
   orderMode: OrderMode;
@@ -34,12 +45,13 @@ export interface PracticeSettings {
   enabledGroups: KanaGroup[];
 }
 
-/** One practice round = one romaji entry; scripts graded independently. */
+/** 一轮练习：同一罗马音下的一个或多个字体（当前产品每次只出一种字体） */
 export interface PracticeRound {
   entry: KanaEntry;
   scripts: ScriptKind[];
 }
 
+/** 进度面板一行数据 */
 export interface ProgressRow {
   key: string;
   entryId: string;
@@ -49,32 +61,30 @@ export interface ProgressRow {
   group: KanaGroup;
   order: number;
   stats: ItemStats;
-  /** stage === 5 (mature); still reviewed when due */
+  /** stage 已达成熟；到期仍会复习 */
   mastered: boolean;
   tone: string;
   stageLabel: string;
   dueLabel: string;
 }
 
+/** 当日会话快照（队列、新卡额度、答错暂避） */
 export interface SessionSnapshot {
-  /** Card keys `entryId:script` remaining in this session */
+  /** 剩余卡片键 `entryId:script` */
   queue: string[];
   date: string;
   newIntroduced: number;
   reviewedCount: number;
-  /** Don't show key again until reviewedCount reaches this (wrong-card spacing). */
+  /** 在 reviewedCount 达到该值之前不再展示该键（答错间隔） */
   buryUntil: Record<string, number>;
 }
 
 const DEFAULT_SETTINGS: PracticeSettings = {
-  scriptMode: "both",
-  orderMode: "sequential",
-  newCardsPerDay: 10,
-  enabledGroups: ["seion", "dakuon", "handakuon", "youon"],
+  scriptMode: DEFAULT_PRACTICE_SETTINGS.scriptMode,
+  orderMode: DEFAULT_PRACTICE_SETTINGS.orderMode,
+  newCardsPerDay: DEFAULT_PRACTICE_SETTINGS.newCardsPerDay,
+  enabledGroups: [...DEFAULT_PRACTICE_SETTINGS.enabledGroups],
 };
-
-/** Other cards to grade before a wrong card can reappear in this session. */
-const WRONG_REQUEUE_GAP = 3;
 
 const EMPTY_SESSION: SessionSnapshot = {
   queue: [],
@@ -84,10 +94,23 @@ const EMPTY_SESSION: SessionSnapshot = {
   buryUntil: {},
 };
 
+/**
+ * 拼装卡片键：`假名Id:字体`。
+ * @param entryId - 假名条目 id
+ * @param script - 平假名或片假名
+ * @returns 唯一键字符串
+ * @副作用 无
+ */
 export function itemKey(entryId: string, script: ScriptKind): string {
   return `${entryId}:${script}`;
 }
 
+/**
+ * 解析卡片键。
+ * @param key - `entryId:script` 形式
+ * @returns 解析结果；非法时返回 null
+ * @副作用 无
+ */
 function parseItemKey(key: string): { entryId: string; script: ScriptKind } | null {
   const idx = key.lastIndexOf(":");
   if (idx < 0) return null;
@@ -97,16 +120,34 @@ function parseItemKey(key: string): { entryId: string; script: ScriptKind } | nu
   return { entryId, script };
 }
 
+/**
+ * 根据练习模式展开需要练习的字体列表。
+ * @param mode - 平 / 片 / 两者
+ * @returns 字体数组
+ * @副作用 无
+ */
 function scriptsForMode(mode: ScriptMode): ScriptKind[] {
   if (mode === "hiragana") return ["hiragana"];
   if (mode === "katakana") return ["katakana"];
   return ["hiragana", "katakana"];
 }
 
+/**
+ * 字体中文标签。
+ * @param script - 字体种类
+ * @returns 「平假名」或「片假名」
+ * @副作用 无
+ */
 function scriptLabel(script: ScriptKind): string {
   return script === "hiragana" ? "平假名" : "片假名";
 }
 
+/**
+ * 合并并钳制设置（兼容旧字段 hideAfterCorrect）。
+ * @param value - 原始或部分设置
+ * @returns 合法的完整设置
+ * @副作用 无
+ */
 function mergeSettings(value: PracticeSettings & { hideAfterCorrect?: number }): PracticeSettings {
   const groups = value.enabledGroups?.length ? value.enabledGroups : DEFAULT_SETTINGS.enabledGroups;
   const rawNew =
@@ -116,12 +157,21 @@ function mergeSettings(value: PracticeSettings & { hideAfterCorrect?: number }):
   return {
     scriptMode: value.scriptMode ?? DEFAULT_SETTINGS.scriptMode,
     orderMode: value.orderMode ?? DEFAULT_SETTINGS.orderMode,
-    newCardsPerDay: Math.min(40, Math.max(1, Math.round(rawNew))),
+    newCardsPerDay: Math.min(
+      NEW_CARDS_PER_DAY.max,
+      Math.max(NEW_CARDS_PER_DAY.min, Math.round(rawNew)),
+    ),
     enabledGroups: groups,
   };
 }
 
-/** Fisher–Yates shuffle (in place). */
+/**
+ * Fisher–Yates 原地洗牌。
+ * @typeParam T - 元素类型
+ * @param items - 将被打乱的数组
+ * @returns 同一数组引用
+ * @副作用 原地修改 `items`
+ */
 function shuffleInPlace<T>(items: T[]): T[] {
   for (let i = items.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -132,6 +182,14 @@ function shuffleInPlace<T>(items: T[]): T[] {
   return items;
 }
 
+/**
+ * 按五十音序比较两张卡片键（同序时平假名优先）。
+ * @param a - 卡片键 A
+ * @param b - 卡片键 B
+ * @param entryById - 条目索引
+ * @returns 比较结果（负 / 0 / 正）
+ * @副作用 无
+ */
 function compareCardKeys(a: string, b: string, entryById: Map<string, KanaEntry>): number {
   const pa = parseItemKey(a);
   const pb = parseItemKey(b);
@@ -145,12 +203,17 @@ function compareCardKeys(a: string, b: string, entryById: Map<string, KanaEntry>
   return pa.script === "hiragana" ? -1 : 1;
 }
 
+/**
+ * 练习会话核心：题库队列、间隔重复批改、设置与进度行。
+ * @returns 供界面绑定的状态与方法
+ * @副作用 读写 localStorage（经 useStorage）；迁移旧统计键
+ */
 export function usePractice() {
-  const settings = useStorage<PracticeSettings>("settings", { ...DEFAULT_SETTINGS });
-  const stats = useStorage<Record<string, ItemStats>>("stats", {});
-  const currentEntryId = useStorage<string | null>("currentEntryId", null);
-  const currentScripts = useStorage<ScriptKind[]>("currentScripts", []);
-  const session = useStorage<SessionSnapshot>("session", { ...EMPTY_SESSION });
+  const settings = useStorage<PracticeSettings>(STORAGE_KEYS.settings, { ...DEFAULT_SETTINGS });
+  const stats = useStorage<Record<string, ItemStats>>(STORAGE_KEYS.stats, {});
+  const currentEntryId = useStorage<string | null>(STORAGE_KEYS.currentEntryId, null);
+  const currentScripts = useStorage<ScriptKind[]>(STORAGE_KEYS.currentScripts, []);
+  const session = useStorage<SessionSnapshot>(STORAGE_KEYS.session, { ...EMPTY_SESSION });
 
   settings.value = mergeSettings(
     settings.value as PracticeSettings & { hideAfterCorrect?: number },
@@ -172,10 +235,21 @@ export function usePractice() {
 
   const entryById = computed(() => new Map(enabledEntries.value.map((e) => [e.id, e])));
 
+  /**
+   * 读取某卡片统计，缺省返回空统计。
+   * @param key - 卡片键
+   * @returns 统计对象
+   * @副作用 无
+   */
   function getStats(key: string): ItemStats {
     return stats.value[key] ?? emptyStats();
   }
 
+  /**
+   * 按当前设置列出全部可练卡片键。
+   * @returns 卡片键数组
+   * @副作用 无
+   */
   function allCardKeys(): string[] {
     const keys: string[] = [];
     const scripts = scriptsForMode(settings.value.scriptMode);
@@ -187,6 +261,12 @@ export function usePractice() {
     return keys;
   }
 
+  /**
+   * 若跨日则重置会话额度与队列。
+   * @param now - 当前时间
+   * @returns 无
+   * @副作用 可能覆写 `session`
+   */
   function ensureSessionDay(now = Date.now()) {
     const today = localDateKey(now);
     if (session.value.date !== today) {
@@ -197,11 +277,23 @@ export function usePractice() {
     }
   }
 
+  /**
+   * 卡片是否仍处在答错「暂避」窗口。
+   * @param key - 卡片键
+   * @returns 是否暂避
+   * @副作用 无
+   */
   function isBuried(key: string): boolean {
     const until = session.value.buryUntil?.[key];
     return until != null && until > session.value.reviewedCount;
   }
 
+  /**
+   * 清除某卡的暂避标记。
+   * @param key - 卡片键
+   * @returns 无
+   * @副作用 更新 `session.buryUntil`
+   */
   function clearBury(key: string) {
     const buryUntil = session.value.buryUntil;
     if (!buryUntil || buryUntil[key] == null) return;
@@ -210,6 +302,12 @@ export function usePractice() {
     session.value = { ...session.value, buryUntil: next };
   }
 
+  /**
+   * 按设置对键列表排序或随机打乱。
+   * @param keys - 原始键列表
+   * @returns 新数组（已排序或已洗牌）
+   * @副作用 无（洗牌作用于副本）
+   */
   function sortOrShuffle(keys: string[]): string[] {
     const copy = [...keys];
     if (settings.value.orderMode === "random") {
@@ -218,7 +316,12 @@ export function usePractice() {
     return copy.sort((a, b) => compareCardKeys(a, b, entryById.value));
   }
 
-  /** Due / in-progress cards only. New cards are introduced one at a time when shown. */
+  /**
+   * 构建仅含到期卡的会话队列（新卡按需单独引入）。
+   * @param now - 当前时间
+   * @returns 到期卡片键队列
+   * @副作用 可能切日重置 session
+   */
   function buildSessionQueue(now = Date.now()): string[] {
     ensureSessionDay(now);
     const due: string[] = [];
@@ -228,6 +331,12 @@ export function usePractice() {
     return sortOrShuffle(due);
   }
 
+  /**
+   * 队列为空时用到期卡重建。
+   * @param now - 当前时间
+   * @returns 无
+   * @副作用 可能写入 `session.queue`
+   */
   function refillQueueIfNeeded(now = Date.now()) {
     ensureSessionDay(now);
     if (session.value.queue.length > 0) return;
@@ -237,11 +346,14 @@ export function usePractice() {
     };
   }
 
-  /** Pull the next never-seen card into play and spend one of today's new-card slots. */
-  function introduceNextNewCard(
-    now = Date.now(),
-    excludeEntryId?: string,
-  ): PracticeRound | null {
+  /**
+   * 引入下一张从未练过的新卡，并消耗今日新卡额度。
+   * @param now - 当前时间
+   * @param excludeEntryId - 可选：避免与刚练过的假名重复
+   * @returns 新的练习轮次；额度用尽或无新卡时返回 null
+   * @副作用 更新 stats.dueAt、session.newIntroduced
+   */
+  function introduceNextNewCard(now = Date.now(), excludeEntryId?: string): PracticeRound | null {
     ensureSessionDay(now);
     const remainingNew = Math.max(0, settings.value.newCardsPerDay - session.value.newIntroduced);
     if (remainingNew <= 0) return null;
@@ -281,7 +393,12 @@ export function usePractice() {
     return { entry, scripts: [script] };
   }
 
-  /** One queue card = one script; never merge 平/片 into a dual round. */
+  /**
+   * 从队列取出下一轮（单字体）；必要时引入新卡或轮转暂避卡。
+   * @param excludeEntryId - 可选：推进时避开的假名 id
+   * @returns 下一轮练习；今日无可练时 null
+   * @副作用 弹出队列、清暂避、可能引入新卡
+   */
   function takeNextRound(excludeEntryId?: string): PracticeRound | null {
     const now = Date.now();
     refillQueueIfNeeded(now);
@@ -289,11 +406,10 @@ export function usePractice() {
     const modeScripts = scriptsForMode(settings.value.scriptMode);
     const rotated = new Set<string>();
     let guard = 0;
-    while (guard++ < 5000) {
+    while (guard++ < TAKE_ROUND_GUARD_LIMIT) {
       if (session.value.queue.length === 0) {
         refillQueueIfNeeded(now);
         if (session.value.queue.length === 0) {
-          // No due reviews left — reveal the next new card (decrements 新卡剩余).
           return introduceNextNewCard(now, excludeEntryId);
         }
       }
@@ -314,11 +430,9 @@ export function usePractice() {
       const blockedByBury = isBuried(firstKey);
 
       if (blockedByExclude || blockedByBury) {
-        // Defer same entry / recently-wrong card; prefer other due cards or a new card.
         if (rotated.has(firstKey)) {
           const introduced = introduceNextNewCard(now, excludeEntryId);
           if (introduced) return introduced;
-          // Nothing else left today — still retry unresolved wrongs instead of ending.
         } else {
           rotated.add(firstKey);
           session.value = {
@@ -350,16 +464,33 @@ export function usePractice() {
     return null;
   }
 
+  /**
+   * 设置当前轮次并同步持久化的当前假名 / 字体。
+   * @param round - 练习轮次或 null
+   * @returns 无
+   * @副作用 写 `current` 与 storage 中的当前项
+   */
   function setCurrent(round: PracticeRound | null) {
     current.value = round;
     currentEntryId.value = round?.entry.id ?? null;
     currentScripts.value = round?.scripts ?? [];
   }
 
+  /**
+   * 推进到下一轮。
+   * @param excludeEntryId - 可选避开的假名
+   * @returns 无
+   * @副作用 更新当前轮次与队列
+   */
   function advance(excludeEntryId?: string) {
     setCurrent(takeNextRound(excludeEntryId));
   }
 
+  /**
+   * 尝试从持久化的 currentEntryId / scripts 恢复当前轮。
+   * @returns 是否恢复成功
+   * @副作用 可能写 `current`
+   */
   function restoreCurrent(): boolean {
     const id = currentEntryId.value;
     if (!id) return false;
@@ -375,13 +506,17 @@ export function usePractice() {
     return true;
   }
 
+  /**
+   * 确保有合法当前轮（恢复或新取）；设置变更后也会调用。
+   * @returns 无
+   * @副作用 可能改队列与当前轮
+   */
   function ensureCurrent() {
     ensureSessionDay();
     if (!current.value) {
       if (!restoreCurrent()) advance();
       return;
     }
-    // Keep current if entry still enabled; collapse any legacy dual round to one script.
     const entry = entryById.value.get(current.value.entry.id);
     if (!entry) {
       advance(current.value.entry.id);
@@ -396,6 +531,13 @@ export function usePractice() {
     setCurrent({ entry, scripts: [script] });
   }
 
+  /**
+   * 对当前轮某一字体自评对错，并更新 SRS / 队列。
+   * @param script - 被批改的字体
+   * @param correct - 是否正确
+   * @returns 无
+   * @副作用 写 stats、session（含答错再入队与暂避）
+   */
   function gradeScript(script: ScriptKind, correct: boolean) {
     const round = current.value;
     if (!round || !round.scripts.includes(script)) return;
@@ -412,7 +554,6 @@ export function usePractice() {
       reviewedCount,
     };
 
-    // Wrong: come back later this session, but not as the very next cards.
     if (!correct) {
       const q = session.value.queue.filter((k) => k !== key);
       q.push(key);
@@ -429,27 +570,41 @@ export function usePractice() {
     }
   }
 
+  /**
+   * 进入下一轮（避开刚练过的假名 id）。
+   * @returns 无
+   * @副作用 更新当前轮与队列
+   */
   function nextRound() {
     const id = current.value?.entry.id;
     advance(id);
   }
 
+  /**
+   * 清空全部进度与会话，并重新出题。
+   * @returns 无
+   * @副作用 清空 stats / session；删除若干旧 localStorage 键
+   */
   function resetProgress() {
     stats.value = {};
     currentEntryId.value = null;
     currentScripts.value = [];
     session.value = { ...EMPTY_SESSION, date: localDateKey() };
     try {
-      localStorage.removeItem("gojuuon-learning:streaks");
-      localStorage.removeItem("gojuuon-learning:randomQueue");
-      localStorage.removeItem("gojuuon-learning:sequentialIndex");
+      localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.streaks}`);
+      localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.randomQueue}`);
+      localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.sequentialIndex}`);
     } catch {
       // ignore
     }
     advance();
   }
 
-  /** Clear session queue and rebuild (keeps SRS history and today's new-card quota). */
+  /**
+   * 清空会话队列并按当前设置重建（保留 SRS 与今日新卡额度）。
+   * @returns 无
+   * @副作用 重建 queue 并设置当前轮
+   */
   function restartFromBeginning() {
     ensureSessionDay();
     session.value = {
@@ -463,6 +618,12 @@ export function usePractice() {
     setCurrent(takeNextRound());
   }
 
+  /**
+   * 部分更新练习设置；题库相关变更时清空会话队列。
+   * @param patch - 设置补丁
+   * @returns 无
+   * @副作用 写 settings；可能清空 queue
+   */
   function updateSettings(patch: Partial<PracticeSettings>) {
     const prev = settings.value;
     const next = mergeSettings({ ...settings.value, ...patch });
@@ -507,7 +668,7 @@ export function usePractice() {
           group: entry.group,
           order: entry.order,
           stats: s,
-          mastered: s.stage >= 5,
+          mastered: s.stage >= SrsStageLevel.MATURE,
           tone: progressTone(s),
           stageLabel: stageLabel(s.stage),
           dueLabel: formatDue(s.dueAt, now),
@@ -542,6 +703,11 @@ export function usePractice() {
     restartFromBeginning,
     updateSettings,
     scriptLabel,
+    /**
+     * 当前轮指定字体的假名字形。
+     * @param script - 字体
+     * @returns 假名字符串；无当前轮时为空串
+     */
     kanaFor: (script: ScriptKind) => (current.value ? kanaGlyph(current.value.entry, script) : ""),
   };
 }

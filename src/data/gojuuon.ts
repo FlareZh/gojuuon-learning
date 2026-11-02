@@ -8,7 +8,7 @@ export interface KanaEntry {
   hiragana: string;
   katakana: string;
   group: KanaGroup;
-  /** Gojuuon row order within the full table */
+  /** 在整表中的五十音序下标 */
   order: number;
 }
 
@@ -127,6 +127,13 @@ export const GOJUUON: KanaEntry[] = [
   { id: "pyo", romaji: "pyo", hiragana: "ぴょ", katakana: "ピョ", group: "youon", order: 104 },
 ];
 
+/**
+ * 按字体取出假名字形。
+ * @param entry - 五十音条目
+ * @param script - 平假名或片假名
+ * @returns 对应字形字符串
+ * @副作用 无
+ */
 export function kanaGlyph(entry: KanaEntry, script: ScriptKind): string {
   return script === "hiragana" ? entry.hiragana : entry.katakana;
 }

@@ -4,16 +4,14 @@
 import {
   CORRECT_INTERVAL_MS,
   DUE_LABEL_THRESHOLDS,
-  LEGACY_STORAGE_KEYS,
   MS,
   PROGRESS_TONE,
-  STORAGE_PREFIX,
   SrsStageLevel,
   WRONG_STAGE_PENALTY,
 } from "@/constants/product";
 
 /** SRS 阶段字面量类型：0 新卡 … 5 成熟 */
-export type SrsStage = 0 | 1 | 2 | 3 | 4 | 5;
+type SrsStage = 0 | 1 | 2 | 3 | 4 | 5;
 
 /** 单个「假名 × 字体」的练习统计与排程字段 */
 export interface ItemStats {
@@ -71,7 +69,7 @@ export function stageLabel(stage: SrsStage): string {
  * @returns 0–5 的整数阶段
  * @副作用 无
  */
-export function clampStage(n: number): SrsStage {
+function clampStage(n: number): SrsStage {
   const v = Math.max(SrsStageLevel.NEW, Math.min(SrsStageLevel.MAX, Math.round(n)));
   return v as SrsStage;
 }
@@ -109,7 +107,7 @@ export function isDue(stats: ItemStats, now: number): boolean {
  * @returns 是否为引入待批改
  * @副作用 无
  */
-export function isIntroducedPending(stats: ItemStats): boolean {
+function isIntroducedPending(stats: ItemStats): boolean {
   return (
     stats.stage === SrsStageLevel.NEW &&
     stats.dueAt != null &&
@@ -193,106 +191,45 @@ export function applySrsGrade(prev: ItemStats, correct: boolean, now = Date.now(
 }
 
 /**
- * 将旧版「连对次数」映射为大致 SRS 阶段（迁移用）。
- * @param currentCorrect - 旧版当前连对
- * @returns 推断的阶段
- * @副作用 无
- */
-function mapLegacyStreakToStage(currentCorrect: number): SrsStage {
-  if (currentCorrect <= 0) return SrsStageLevel.NEW;
-  if (currentCorrect === 1) return 1;
-  if (currentCorrect === 2) return 2;
-  return SrsStageLevel.REVIEW_MIN;
-}
-
-/**
- * 规范化单条统计（兼容缺字段的旧数据）。
+ * 规范化单条统计（补全缺省字段；不兼容非 SRS 旧版）。
  * @param raw - 可能不完整的原始对象
  * @returns 完整 {@link ItemStats}
  * @副作用 无
  */
 function normalizeItem(raw: Partial<ItemStats> & Record<string, unknown>): ItemStats {
   const base = emptyStats();
-  const correct = typeof raw.correct === "number" ? raw.correct : base.correct;
-  const wrong = typeof raw.wrong === "number" ? raw.wrong : base.wrong;
-  const currentCorrect =
-    typeof raw.currentCorrect === "number" ? raw.currentCorrect : base.currentCorrect;
-  const currentWrong = typeof raw.currentWrong === "number" ? raw.currentWrong : base.currentWrong;
-  const maxCorrect = typeof raw.maxCorrect === "number" ? raw.maxCorrect : base.maxCorrect;
-  const maxWrong = typeof raw.maxWrong === "number" ? raw.maxWrong : base.maxWrong;
-
-  const hasSrs = "stage" in raw || "dueAt" in raw || "lastReviewedAt" in raw;
-  if (hasSrs) {
-    return {
-      correct,
-      wrong,
-      currentCorrect,
-      currentWrong,
-      maxCorrect,
-      maxWrong,
-      stage: clampStage(typeof raw.stage === "number" ? raw.stage : SrsStageLevel.NEW),
-      dueAt: typeof raw.dueAt === "number" ? raw.dueAt : raw.dueAt === null ? null : null,
-      lastReviewedAt:
-        typeof raw.lastReviewedAt === "number"
-          ? raw.lastReviewedAt
-          : raw.lastReviewedAt === null
-            ? null
-            : null,
-    };
-  }
-
-  // 无 SRS 字段的旧版统计
-  const practiced = correct > 0 || wrong > 0 || currentCorrect > 0;
-  if (!practiced) return emptyStats();
-
-  const stage = mapLegacyStreakToStage(currentCorrect);
   return {
-    correct: Math.max(correct, currentCorrect),
-    wrong,
-    currentCorrect,
-    currentWrong,
-    maxCorrect: Math.max(maxCorrect, currentCorrect),
-    maxWrong,
-    stage,
-    dueAt: Date.now(),
-    lastReviewedAt: null,
+    correct: typeof raw.correct === "number" ? raw.correct : base.correct,
+    wrong: typeof raw.wrong === "number" ? raw.wrong : base.wrong,
+    currentCorrect:
+      typeof raw.currentCorrect === "number" ? raw.currentCorrect : base.currentCorrect,
+    currentWrong: typeof raw.currentWrong === "number" ? raw.currentWrong : base.currentWrong,
+    maxCorrect: typeof raw.maxCorrect === "number" ? raw.maxCorrect : base.maxCorrect,
+    maxWrong: typeof raw.maxWrong === "number" ? raw.maxWrong : base.maxWrong,
+    stage: clampStage(typeof raw.stage === "number" ? raw.stage : SrsStageLevel.NEW),
+    dueAt: typeof raw.dueAt === "number" ? raw.dueAt : raw.dueAt === null ? null : base.dueAt,
+    lastReviewedAt:
+      typeof raw.lastReviewedAt === "number"
+        ? raw.lastReviewedAt
+        : raw.lastReviewedAt === null
+          ? null
+          : base.lastReviewedAt,
   };
 }
 
 /**
- * 迁移整表统计；若为空则尝试读取旧版连对键。
+ * 规范化整表统计（补全字段）。
  * @param existing - 当前 stats 映射
  * @returns 规范化后的完整映射
- * @副作用 可能读取 localStorage 旧键 streaks（只读）
+ * @副作用 无
  */
-export function migrateStatsMap(
+export function normalizeStatsMap(
   existing: Record<string, Partial<ItemStats>>,
 ): Record<string, ItemStats> {
   const next: Record<string, ItemStats> = {};
   for (const [key, value] of Object.entries(existing)) {
     next[key] = normalizeItem(value as Partial<ItemStats> & Record<string, unknown>);
   }
-
-  if (Object.keys(next).length === 0) {
-    try {
-      const raw = localStorage.getItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.streaks}`);
-      if (raw) {
-        const legacy = JSON.parse(raw) as Record<string, number>;
-        for (const [key, value] of Object.entries(legacy)) {
-          const n = typeof value === "number" && Number.isFinite(value) ? Math.max(0, value) : 0;
-          if (n <= 0) continue;
-          next[key] = normalizeItem({
-            correct: n,
-            currentCorrect: n,
-            maxCorrect: n,
-          });
-        }
-      }
-    } catch {
-      // 忽略损坏的旧数据
-    }
-  }
-
   return next;
 }
 

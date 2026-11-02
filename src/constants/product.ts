@@ -16,9 +16,8 @@ export const STORAGE_KEYS = {
   session: "session",
 } as const;
 
-/** 旧版键名（迁移 / 重置时清理） */
+/** 旧版键名（重置时清理；`currentScripts` 启动时迁到 `currentScript`） */
 export const LEGACY_STORAGE_KEYS = {
-  streaks: "streaks",
   randomQueue: "randomQueue",
   sequentialIndex: "sequentialIndex",
   /** 曾存 `ScriptKind[]`，现已改为单值 `currentScript` */

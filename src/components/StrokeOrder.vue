@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import type { ScriptKind } from "@/data/gojuuon";
-import { resolveStrokeAssets } from "@/data/strokeAssets";
+import { resolveStrokeUrl } from "@/data/strokeAssets";
 
 const props = defineProps<{
   kana: string;
@@ -14,9 +14,7 @@ const props = defineProps<{
 const failed = ref(false);
 const remountKey = ref(0);
 
-const resolved = computed(() => resolveStrokeAssets(props.entryId, props.script));
-/** 稳定 URL，不追加缓存破坏参数（以免打穿 SW / HTTP 缓存） */
-const gifUrls = computed(() => resolved.value.urls);
+const gifUrl = computed(() => resolveStrokeUrl(props.entryId, props.script));
 
 watch(
   () => [props.entryId, props.script, props.playToken] as const,
@@ -38,23 +36,17 @@ function onImgError() {
 </script>
 
 <template>
-  <div
-    class="stroke"
-    :class="[`stroke--${script}`, { 'stroke--split': !failed && gifUrls.length > 1 }]"
-  >
-    <template v-if="!failed && gifUrls.length">
-      <img
-        v-for="(url, index) in gifUrls"
-        :key="`${remountKey}-${index}-${url}`"
-        class="stroke__gif"
-        :src="url"
-        :alt="`${kana} 笔顺 ${index + 1}`"
-        decoding="async"
-        @error="onImgError"
-      />
-    </template>
+  <div class="stroke" :class="`stroke--${script}`">
+    <img
+      v-if="!failed && gifUrl"
+      :key="`${remountKey}-${gifUrl}`"
+      class="stroke__gif"
+      :src="gifUrl"
+      :alt="`${kana} 笔顺`"
+      decoding="async"
+      @error="onImgError"
+    />
     <div v-else class="stroke__fallback" lang="ja">{{ kana }}</div>
-    <p v-if="resolved.note && !failed" class="stroke__note">{{ resolved.note }}</p>
   </div>
 </template>
 
@@ -67,6 +59,7 @@ function onImgError() {
   border-radius: 4px;
   overflow: hidden;
   padding: 0.35rem;
+  container-type: size;
 }
 
 .stroke--hiragana {
@@ -77,12 +70,6 @@ function onImgError() {
 .stroke--katakana {
   border: 1px solid var(--board-kata-border);
   background: var(--board-kata);
-}
-
-.stroke--split {
-  grid-template-columns: 1fr 1fr;
-  gap: 0.25rem;
-  align-items: center;
 }
 
 .stroke__gif {
@@ -96,27 +83,10 @@ function onImgError() {
 
 .stroke__fallback {
   font-family: "Noto Serif JP", "Hiragino Mincho ProN", serif;
-  font-size: clamp(2.2rem, 12vw, 3.4rem);
+  /* 字形约占格子边长的一半 */
+  font-size: 50cqmin;
   font-weight: 600;
   color: #1a2e26;
   line-height: 1;
-}
-
-.stroke__note {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  margin: 0;
-  padding: 0.2rem 0.3rem;
-  font-size: 0.58rem;
-  line-height: 1.25;
-  text-align: center;
-  color: #5a6d64;
-  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.88) 35%);
-}
-
-.stroke--split .stroke__note {
-  grid-column: 1 / -1;
 }
 </style>

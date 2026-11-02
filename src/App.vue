@@ -8,7 +8,7 @@ import StrokeOrder from "@/components/StrokeOrder.vue";
 import { usePractice } from "@/composables/usePractice";
 import { AUTO_ADVANCE_AFTER_GRADE_MS, STROKE_PREFETCH } from "@/constants/product";
 import { FEEDBACK_ISSUES_URL } from "@/constants/links";
-import { allSeionStrokeUrls, prefetchStrokeUrls, resolveStrokeAssets } from "@/data/strokeAssets";
+import { allSeionStrokeUrls, prefetchStrokeUrls, resolveStrokeUrl } from "@/data/strokeAssets";
 
 /** 界面阶段：书写 / 对照自评 */
 type Phase = "draw" | "review";
@@ -74,20 +74,11 @@ watch(
     if (!round) return "";
     return `${round.entry.id}|${round.script}`;
   },
-  () => {
-    resetRoundUi();
-  },
-);
-
-watch(
-  () => {
-    const round = current.value;
-    if (!round) return "";
-    return `${round.entry.id}|${round.script}`;
-  },
-  (key) => {
+  (key, prev) => {
+    // Skip UI reset on the immediate first run (same as the old non-immediate watch).
+    if (prev !== undefined) resetRoundUi();
     if (!key || !current.value) return;
-    prefetchStrokeUrls(resolveStrokeAssets(current.value.entry.id, current.value.script).urls);
+    prefetchStrokeUrls([resolveStrokeUrl(current.value.entry.id, current.value.script)]);
   },
   { immediate: true },
 );
@@ -250,7 +241,9 @@ const promptScriptTitle = computed(() => {
     <footer class="app-footer">
       <a :href="FEEDBACK_ISSUES_URL" target="_blank" rel="noopener noreferrer">反馈 / Issues</a>
       <span class="app-footer__sep" aria-hidden="true">·</span>
-      <button type="button" class="app-footer__mail" @click="feedbackOpen = true">页内反馈</button>
+      <button type="button" class="app-footer__feedback" @click="feedbackOpen = true">
+        页内反馈
+      </button>
     </footer>
 
     <FeedbackPanel :open="feedbackOpen" @close="feedbackOpen = false" />
@@ -361,7 +354,7 @@ const promptScriptTitle = computed(() => {
 }
 
 .app-footer a,
-.app-footer__mail {
+.app-footer__feedback {
   font: inherit;
   font-size: 0.78rem;
   color: #5a6d64;
@@ -375,15 +368,9 @@ const promptScriptTitle = computed(() => {
 }
 
 .app-footer a:hover,
-.app-footer__mail:hover:not(:disabled) {
+.app-footer__feedback:hover {
   color: #2d4a3e;
   text-decoration: underline;
-}
-
-.app-footer__mail:disabled {
-  opacity: 0.55;
-  cursor: not-allowed;
-  text-decoration: none;
 }
 
 .app-footer__sep {
@@ -452,9 +439,7 @@ const promptScriptTitle = computed(() => {
 }
 
 .boards {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 0.75rem;
+  min-width: 0;
 }
 
 .actions {

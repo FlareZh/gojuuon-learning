@@ -370,7 +370,7 @@ onUnmounted(() => {
   window.visualViewport?.removeEventListener("resize", sizeCanvas);
 });
 
-defineExpose({ clear, getSnapshot });
+defineExpose({ getSnapshot });
 </script>
 
 <template>

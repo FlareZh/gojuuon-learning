@@ -3,10 +3,7 @@
 :root {
   color-scheme: light;
   --ink: #1a2e26;
-  --muted: #5a6d64;
   --paper: #f3ebe0;
-  --paper-deep: #e7dccb;
-  --accent: #2d4a3e;
   /* 田字格：平假名偏暖、片假名偏冷，避免写错字体 */
   --board-hira: #fff6e8;
   --board-hira-deep: #f0e0c8;

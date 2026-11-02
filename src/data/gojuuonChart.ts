@@ -3,10 +3,10 @@
  * （纯数据表，无业务魔法数。）
  */
 
-export type ChartCellId = string | null;
+type ChartCellId = string | null;
 
 /** 进度图中的一个分区（清音 / 浊音 / 半浊音 / 拗音） */
-export interface ChartSection {
+interface ChartSection {
   id: string;
   title: string;
   columns: number;

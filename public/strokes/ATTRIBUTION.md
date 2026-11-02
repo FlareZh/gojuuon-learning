@@ -13,7 +13,7 @@ Animated stroke-order GIFs under `hiragana/` and `katakana/` come from **小楠�
 
 - Pack includes **清音** only: 46 hiragana + 46 katakana GIFs.
 - Source filenames use `hu.gif` for ふ/フ; vendored here as `fu.gif` to match app kana ids.
-- 浊音 / 半浊音 / 拗音 have no dedicated GIFs on the source page; the app maps them to base seion stroke assets (see `src/data/strokeAssets.ts`).
+- 浊音 / 半浊音 / 拗音 have no dedicated GIFs on the source page; the app shows a static glyph instead (see `src/data/strokeAssets.ts`).
 
 ## Refresh
 

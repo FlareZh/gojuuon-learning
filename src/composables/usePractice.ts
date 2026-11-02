@@ -24,7 +24,7 @@ import {
   isNewCard,
   isReviewDue,
   localDateKey,
-  migrateStatsMap,
+  normalizeStatsMap,
   progressTone,
   stageLabel,
   type ItemStats,
@@ -43,7 +43,7 @@ export interface PracticeSettings {
 }
 
 /** 一轮练习：单一假名条目 × 一种字体 */
-export interface PracticeRound {
+interface PracticeRound {
   entry: KanaEntry;
   script: ScriptKind;
 }
@@ -66,7 +66,7 @@ export interface ProgressRow {
 }
 
 /** 当日会话快照（队列、新卡额度、答错暂避） */
-export interface SessionSnapshot {
+interface SessionSnapshot {
   /** 剩余卡片键 `entryId:script` */
   queue: string[];
   date: string;
@@ -156,12 +156,12 @@ function scriptLabel(script: ScriptKind): string {
 }
 
 /**
- * 合并并钳制设置（兼容旧字段 hideAfterCorrect）。
+ * 合并并钳制设置。
  * @param value - 原始或部分设置
  * @returns 合法的完整设置
  * @副作用 无
  */
-function mergeSettings(value: PracticeSettings & { hideAfterCorrect?: number }): PracticeSettings {
+function mergeSettings(value: Partial<PracticeSettings>): PracticeSettings {
   const groups = value.enabledGroups?.length ? value.enabledGroups : DEFAULT_SETTINGS.enabledGroups;
   const rawNew =
     typeof value.newCardsPerDay === "number"
@@ -219,7 +219,7 @@ function compareCardKeys(a: string, b: string, entryById: Map<string, KanaEntry>
 /**
  * 练习会话核心：题库队列、间隔重复批改、设置与进度行。
  * @returns 供界面绑定的状态与方法
- * @副作用 读写 localStorage（经 useStorage）；迁移旧统计键
+ * @副作用 读写 localStorage（经 useStorage）；可能迁移 `currentScripts` 旧键
  */
 export function usePractice() {
   const settings = useStorage<PracticeSettings>(STORAGE_KEYS.settings, { ...DEFAULT_SETTINGS });
@@ -228,10 +228,8 @@ export function usePractice() {
   const currentScript = useStorage<ScriptKind | null>(STORAGE_KEYS.currentScript, null);
   const session = useStorage<SessionSnapshot>(STORAGE_KEYS.session, { ...EMPTY_SESSION });
 
-  settings.value = mergeSettings(
-    settings.value as PracticeSettings & { hideAfterCorrect?: number },
-  );
-  stats.value = migrateStatsMap(stats.value);
+  settings.value = mergeSettings(settings.value);
+  stats.value = normalizeStatsMap(stats.value);
   session.value = {
     ...EMPTY_SESSION,
     ...session.value,
@@ -628,7 +626,6 @@ export function usePractice() {
     currentScript.value = null;
     session.value = { ...EMPTY_SESSION, date: localDateKey() };
     try {
-      localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.streaks}`);
       localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.randomQueue}`);
       localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.sequentialIndex}`);
       localStorage.removeItem(`${STORAGE_PREFIX}${LEGACY_STORAGE_KEYS.currentScripts}`);

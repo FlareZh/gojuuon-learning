@@ -42,7 +42,7 @@ Vue 3 + Vite + TypeScript 五十音手写练习。罗马音提示，画板书写
 | 3–4  | 复习中 | 7 天 → 16 天                |
 | 5    | 成熟   | 30 天（见顶，仍会到期复习） |
 
-答错：阶段回退两档，并尽快再练（本会话队尾或下次打开）。旧版「连对后隐藏」数据会迁移为对应阶段，并设为立即到期。
+答错：阶段回退两档，并尽快再练（本会话队尾或下次打开）。
 
 ## 开发
 
@@ -82,7 +82,7 @@ Vendored under `public/strokes/` from **小楠日语** 官方打包下载（非�
 - 页面：https://riyutool.com/50yintu-bishun/
 - 打包：https://down.riyutool.com/download/50yintubishun.zip
 - 说明：`public/strokes/ATTRIBUTION.md`
-- 映射逻辑：`src/data/strokeAssets.ts`（`fu` ← 源站 `hu`；浊音/半浊音→清音基字；拗音→基字 + 小やゆよ）
+- 映射逻辑：`src/data/strokeAssets.ts`（`fu` ← 源站 `hu`；仅清音有动图，浊/半浊/拗音显示静态字形）
 
 ## PWA
 
@@ -108,7 +108,7 @@ Vendored under `public/strokes/` from **小楠日语** 官方打包下载（非�
 | `src/data/gojuuonChart.ts`         | 五十音图布局                |
 | `src/data/strokeAssets.ts`         | 笔顺 GIF 路径解析           |
 | `src/composables/usePractice.ts`   | 会话队列 / 出题             |
-| `src/composables/srs.ts`           | 间隔重复阶段与迁移          |
+| `src/composables/srs.ts`           | 间隔重复阶段与规范化        |
 | `src/composables/useStorage.ts`    | localStorage                |
 | `src/components/DrawingBoard.vue`  | 手写画板                    |
 | `src/components/StrokeOrder.vue`   | 正确写法中的笔顺动图        |

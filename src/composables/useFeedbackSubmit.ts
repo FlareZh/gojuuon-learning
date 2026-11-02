@@ -8,7 +8,7 @@ import {
   isFeedbackConfigured,
 } from "@/constants/links";
 
-export interface FeedbackPayload {
+interface FeedbackPayload {
   /** 反馈正文 */
   message: string;
   /** 可选回信邮箱 */
@@ -17,9 +17,7 @@ export interface FeedbackPayload {
   botcheck?: string;
 }
 
-export type FeedbackSubmitResult =
-  | { ok: true }
-  | { ok: false; error: string };
+type FeedbackSubmitResult = { ok: true } | { ok: false; error: string };
 
 /** 模块级上次成功提交时间，多入口共用冷却 */
 let lastSuccessAt = 0;

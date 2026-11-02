@@ -3,7 +3,7 @@ import type { ScriptKind } from "./gojuuon";
 
 /**
  * 笔顺 GIF：来自小楠日语官方打包（https://riyutool.com/50yintu-bishun/）。
- * 源站仅有清音；浊音 / 半浊音 / 拗音映射到基础清音动图。
+ * 源站仅有清音；浊音 / 半浊音 / 拗音无专用动图，对照时显示静态字形。
  */
 
 /** 源站用 `hu` 表示 ふ；入库时改名为 `fu`。 */
@@ -60,83 +60,6 @@ type SeionId = (typeof SEION_IDS)[number];
 
 const SEION_SET = new Set<string>(SEION_IDS);
 
-/** 浊音 / 半浊音 → 用于笔顺动图的清音基底 id */
-const DAKUON_BASE: Record<string, SeionId> = {
-  ga: "ka",
-  gi: "ki",
-  gu: "ku",
-  ge: "ke",
-  go: "ko",
-  za: "sa",
-  ji: "shi",
-  zu: "su",
-  ze: "se",
-  zo: "so",
-  da: "ta",
-  di: "chi",
-  du: "tsu",
-  de: "te",
-  do: "to",
-  ba: "ha",
-  bi: "hi",
-  bu: "fu",
-  be: "he",
-  bo: "ho",
-  pa: "ha",
-  pi: "hi",
-  pu: "fu",
-  pe: "he",
-  po: "ho",
-};
-
-/** Youon → [consonant base, small ya/yu/yo] */
-const YOUON_PARTS: Record<string, [SeionId, SeionId]> = {
-  kya: ["ki", "ya"],
-  kyu: ["ki", "yu"],
-  kyo: ["ki", "yo"],
-  sha: ["shi", "ya"],
-  shu: ["shi", "yu"],
-  sho: ["shi", "yo"],
-  cha: ["chi", "ya"],
-  chu: ["chi", "yu"],
-  cho: ["chi", "yo"],
-  nya: ["ni", "ya"],
-  nyu: ["ni", "yu"],
-  nyo: ["ni", "yo"],
-  hya: ["hi", "ya"],
-  hyu: ["hi", "yu"],
-  hyo: ["hi", "yo"],
-  mya: ["mi", "ya"],
-  myu: ["mi", "yu"],
-  myo: ["mi", "yo"],
-  rya: ["ri", "ya"],
-  ryu: ["ri", "yu"],
-  ryo: ["ri", "yo"],
-  gya: ["ki", "ya"],
-  gyu: ["ki", "yu"],
-  gyo: ["ki", "yo"],
-  ja: ["shi", "ya"],
-  ju: ["shi", "yu"],
-  jo: ["shi", "yo"],
-  bya: ["hi", "ya"],
-  byu: ["hi", "yu"],
-  byo: ["hi", "yo"],
-  pya: ["hi", "ya"],
-  pyu: ["hi", "yu"],
-  pyo: ["hi", "yo"],
-};
-
-type StrokeKind = "exact" | "dakuon-base" | "handakuon-base" | "youon-parts";
-
-interface StrokeResolve {
-  /** GIF paths under public/strokes/... (respects Vite base) */
-  urls: string[];
-  kind: StrokeKind;
-  /** Filenames / seion ids used */
-  assetIds: string[];
-  note: string | null;
-}
-
 /**
  * 为相对路径加上 Vite `BASE_URL`（适配 GitHub Pages 子路径）。
  * @param path - 不以或已以 `/` 开头均可
@@ -161,70 +84,26 @@ function gifPath(script: ScriptKind, id: SeionId): string {
 }
 
 /**
- * 按假名 id 与字体解析应播放的笔顺资源。
+ * 按假名 id 与字体解析笔顺 GIF；无动图时返回 `null`。
  * @param entryId - 五十音条目 id
  * @param script - 平 / 片
- * @returns URL 列表、映射类型与可选说明文案
+ * @returns GIF URL，或 `null`（显示静态字形）
  * @副作用 无
  */
-export function resolveStrokeAssets(entryId: string, script: ScriptKind): StrokeResolve {
-  if (SEION_SET.has(entryId)) {
-    const id = entryId as SeionId;
-    return {
-      urls: [gifPath(script, id)],
-      kind: "exact",
-      assetIds: [id],
-      note: null,
-    };
-  }
-
-  const youon = YOUON_PARTS[entryId];
-  if (youon) {
-    const [base, small] = youon;
-    const dakutenHint =
-      entryId.startsWith("g") || entryId.startsWith("j") || entryId.startsWith("b")
-        ? "（含浊点）"
-        : entryId.startsWith("p")
-          ? "（含半浊点）"
-          : "";
-    return {
-      urls: [gifPath(script, base), gifPath(script, small)],
-      kind: "youon-parts",
-      assetIds: [base, small],
-      note: `源站仅有清音动图；拗音${dakutenHint}拆成基础假名 + 小やゆよ笔顺`,
-    };
-  }
-
-  const base = DAKUON_BASE[entryId];
-  if (base) {
-    const handaku = entryId.startsWith("p");
-    return {
-      urls: [gifPath(script, base)],
-      kind: handaku ? "handakuon-base" : "dakuon-base",
-      assetIds: [base],
-      note: handaku
-        ? "源站仅有清音动图；半浊音显示对应清音笔顺（另加半浊点゜）"
-        : "源站仅有清音动图；浊音显示对应清音笔顺（另加浊点゛）",
-    };
-  }
-
-  // 回退：按条目 id 当作文件名尝试
-  return {
-    urls: [withBase(`${STROKE_ASSET_DIR}/${script}/${entryId}.gif`)],
-    kind: "exact",
-    assetIds: [entryId],
-    note: null,
-  };
+export function resolveStrokeUrl(entryId: string, script: ScriptKind): string | null {
+  if (!SEION_SET.has(entryId)) return null;
+  return gifPath(script, entryId as SeionId);
 }
 
 /**
  * 预取笔顺 GIF，暖热 HTTP / Service Worker 缓存（书写阶段即可调用）。
- * @param urls - 待预取 URL 列表
+ * @param urls - 待预取 URL（会忽略空值）
  * @returns 无
  * @副作用 发起 `fetch`；失败静默忽略
  */
-export function prefetchStrokeUrls(urls: string[]): void {
+export function prefetchStrokeUrls(urls: readonly (string | null | undefined)[]): void {
   for (const url of urls) {
+    if (!url) continue;
     void fetch(url, { credentials: "same-origin", mode: "same-origin" }).catch(() => {
       /* 忽略；对照阶段 img 会再试 */
     });

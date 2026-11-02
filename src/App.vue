@@ -4,12 +4,15 @@ import DrawingBoard from "@/components/DrawingBoard.vue";
 import ProgressPanel from "@/components/ProgressPanel.vue";
 import SettingsPanel from "@/components/SettingsPanel.vue";
 import StrokeOrder from "@/components/StrokeOrder.vue";
+import { useFeedbackMail } from "@/composables/useFeedbackMail";
 import { usePractice } from "@/composables/usePractice";
 import { FEEDBACK_ISSUES_URL } from "@/constants/links";
 import type { ScriptKind } from "@/data/gojuuon";
 import { allSeionStrokeUrls, prefetchStrokeUrls, strokeUrlsForRound } from "@/data/strokeAssets";
 
 type Phase = "draw" | "review";
+
+const { coolingDown, openFeedbackMail } = useFeedbackMail();
 
 const {
   settings,
@@ -254,6 +257,15 @@ const promptScriptTitle = computed(() => {
 
     <footer class="app-footer">
       <a :href="FEEDBACK_ISSUES_URL" target="_blank" rel="noopener noreferrer">反馈 / Issues</a>
+      <span class="app-footer__sep" aria-hidden="true">·</span>
+      <button
+        type="button"
+        class="app-footer__mail"
+        :disabled="coolingDown"
+        @click="openFeedbackMail"
+      >
+        {{ coolingDown ? "请稍候…" : "邮件反馈" }}
+      </button>
     </footer>
 
     <SettingsPanel
@@ -350,20 +362,42 @@ const promptScriptTitle = computed(() => {
 
 .app-footer {
   margin-top: 0.85rem;
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.45rem;
 }
 
-.app-footer a {
+.app-footer a,
+.app-footer__mail {
+  font: inherit;
   font-size: 0.78rem;
   color: #5a6d64;
   text-decoration: none;
   letter-spacing: 0.04em;
+  background: none;
+  border: none;
+  padding: 0.2rem 0.1rem;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
 
-.app-footer a:hover {
+.app-footer a:hover,
+.app-footer__mail:hover:not(:disabled) {
   color: #2d4a3e;
   text-decoration: underline;
+}
+
+.app-footer__mail:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
+.app-footer__sep {
+  font-size: 0.78rem;
+  color: #8a9a92;
 }
 
 .prompt {

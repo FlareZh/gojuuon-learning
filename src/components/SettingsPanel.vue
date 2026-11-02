@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useFeedbackMail } from "@/composables/useFeedbackMail";
 import type { OrderMode, PracticeSettings, ScriptMode } from "@/composables/usePractice";
 import { FEEDBACK_ISSUES_URL } from "@/constants/links";
 import type { KanaGroup } from "@/data/gojuuon";
@@ -17,6 +18,8 @@ const emit = defineEmits<{
   reset: [];
   restart: [];
 }>();
+
+const { coolingDown, openFeedbackMail } = useFeedbackMail();
 
 const groupLabels: Record<KanaGroup, string> = {
   seion: "清音",
@@ -162,14 +165,25 @@ function toggleGroup(group: KanaGroup) {
         </p>
       </section>
 
-      <a
-        class="sheet__feedback"
-        :href="FEEDBACK_ISSUES_URL"
-        target="_blank"
-        rel="noopener noreferrer"
-      >
-        反馈 / Issues
-      </a>
+      <div class="sheet__feedback">
+        <a
+          class="sheet__feedback-link"
+          :href="FEEDBACK_ISSUES_URL"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          反馈 / Issues
+        </a>
+        <button
+          type="button"
+          class="sheet__feedback-mail"
+          :disabled="coolingDown"
+          @click="openFeedbackMail"
+        >
+          {{ coolingDown ? "请稍候…" : "邮件反馈" }}
+        </button>
+      </div>
+      <p class="sheet__hint">缺陷请优先用 Issues；邮件会打开本机邮件客户端，请勿发送密码。</p>
       <button type="button" class="sheet__reset" @click="$emit('reset')">重置进度</button>
     </aside>
   </div>
@@ -326,11 +340,17 @@ function toggleGroup(group: KanaGroup) {
 }
 
 .sheet__feedback {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.45rem;
+  margin-top: 0.5rem;
+}
+
+.sheet__feedback-link,
+.sheet__feedback-mail {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 100%;
-  margin-top: 0.5rem;
   min-height: 2.5rem;
   border: 1px solid rgba(45, 74, 62, 0.28);
   border-radius: 4px;
@@ -339,12 +359,19 @@ function toggleGroup(group: KanaGroup) {
   font: inherit;
   font-size: 0.9rem;
   text-decoration: none;
+  cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation;
 }
 
-.sheet__feedback:hover {
+.sheet__feedback-link:hover,
+.sheet__feedback-mail:hover:not(:disabled) {
   background: rgba(45, 74, 62, 0.06);
+}
+
+.sheet__feedback-mail:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .sheet__reset {

@@ -15,7 +15,13 @@ Vue 3 + Vite + TypeScript 五十音手写练习。罗马音提示，画板书写
 
 ## 反馈 / Issues
 
-欢迎通过 [GitHub Issues](https://github.com/FlareZh/gojuuon-learning/issues) 反馈问题与建议。应用内设置面板与页脚也提供同一入口。
+**优先**通过 [GitHub Issues](https://github.com/FlareZh/gojuuon-learning/issues) 报告缺陷与建议（便于跟踪与讨论）。应用内设置与页脚也提供同一入口。
+
+也可使用应用内「邮件反馈」：点击后通过本机 `mailto:` 打开邮件客户端，主题预填为 `[五十音帖反馈]`。说明：
+
+- 请勿在邮件中发送密码或其他敏感信息
+- `mailto:` 依赖本机邮件客户端，部分环境可能无法打开
+- 无公开可投稿的后端表单（避免未鉴权接口被滥用）；收件地址仅在点击时于客户端拼接
 
 ## 许可
 
